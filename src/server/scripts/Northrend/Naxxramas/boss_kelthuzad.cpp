@@ -320,7 +320,7 @@ public:
                     Talk(SAY_AGGRO);
                     events.Reset();
                     summons.DoAction(ACTION_SECOND_PHASE);
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_DISABLE_MOVE);
+                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_SELECTABLE, UNIT_FLAG_PACIFIED, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_DISABLE_MOVE);
                     me->GetMotionMaster()->MoveChase(me->GetVictim());
                     me->SetReactState(REACT_AGGRESSIVE);
                     events.ScheduleEvent(EVENT_SPELL_FROST_BOLT_SINGLE, 2000);
