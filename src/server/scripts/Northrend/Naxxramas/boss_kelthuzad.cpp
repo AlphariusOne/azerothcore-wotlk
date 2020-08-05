@@ -222,7 +222,7 @@ public:
 
         void MoveInLineOfSight(Unit* who) override
         {
-            if (!me->IsInCombat() && who->GetTypeId() == TYPEID_PLAYER && who->IsAlive() && me->GetDistance(who) <= 50.0f)
+            if (!me->IsInCombat() && who->GetTypeId() == TYPEID_PLAYER && who->IsAlive() && me->GetDistance(who) <= 30.0f)
                 AttackStart(who);
         }
 
