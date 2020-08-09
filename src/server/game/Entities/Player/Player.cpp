@@ -3174,9 +3174,6 @@ void Player::GiveXP(uint32 xp, Unit* victim, float group_rate)
     if (!IsAlive() && !GetBattlegroundId())
         return;
 
-    if (HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_NO_XP_GAIN))
-        return;
-
     if (victim && victim->GetTypeId() == TYPEID_UNIT && !victim->ToCreature()->hasLootRecipient())
         return;
 
@@ -7377,7 +7374,9 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, int32 honor, bool awar
 
     // add honor points
     ModifyHonorPoints(honor);
-
+    if (honor < 2000) {
+        GiveXP(uint32(honor * (3 + getLevel() * 0.20f)), NULL);
+    }
     ApplyModUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, honor, true);
 
     // Xinef: Battleground experience
