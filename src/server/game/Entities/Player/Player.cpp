@@ -7374,9 +7374,6 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, int32 honor, bool awar
 
     // add honor points
     ModifyHonorPoints(honor);
-    if (honor < 2000) {
-        GiveXP(uint32(honor * (3 + getLevel() * 0.20f)), NULL);
-    }
     ApplyModUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION, honor, true);
 
     // Xinef: Battleground experience
