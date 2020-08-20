@@ -1,0 +1,15 @@
+[worldserver]
+
+#
+# Enable gaining epirience for PVP kills
+# default: true
+#
+
+PVPExp.Enable=true
+
+#
+# Rate of gaining exp from PVP kills
+# default: 1
+#
+
+PVPExp.Rate=1
