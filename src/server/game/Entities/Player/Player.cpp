@@ -7619,7 +7619,7 @@ void Player::UpdateArea(uint32 newArea)
     else
         RemoveByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY);
 
-    if (area && area->mapid() == 616)
+    if (area && area->mapid == 616)
     {
         SetByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_FFA_PVP);
     }
