@@ -145,7 +145,7 @@ enum CharacterCustomizeFlags
 #define DEATH_EXPIRE_STEP (5*MINUTE)
 #define MAX_DEATH_COUNT 3
 
-static uint32 copseReclaimDelay[MAX_DEATH_COUNT] = { 30, 60, 120 };
+static uint32 copseReclaimDelay[MAX_DEATH_COUNT] = { 10, 10, 10 };
 
 // == PlayerTaxi ================================================
 
@@ -7619,7 +7619,7 @@ void Player::UpdateArea(uint32 newArea)
     else
         RemoveByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY);
 
-    if (area && area->mapid == 616)
+    if (area && area->ID == 616)
     {
         SetByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_FFA_PVP);
     }
@@ -24405,10 +24405,10 @@ int32 Player::CalculateCorpseReclaimDelay(bool load)
         if (now >= expected_time)
             return -1;
 
-        delay = expected_time - now;
+        delay = 10;
     }
     else
-        delay = GetCorpseReclaimDelay(pvp);
+        delay = 10;
 
     return delay * IN_MILLISECONDS;
 }
