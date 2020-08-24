@@ -18,7 +18,7 @@ public:
             if (killer->GetGUID() == killed->GetGUID())
                 return;
             if (killer->getLevel() - killed->getLevel() < 8) {
-                if (killer->getLevel() < 20)
+                if (killer->getLevel() < 30)
                     killer->GiveXP(uint32(pow(killed->getLevel() + 3, 2) * PVPExpRate), NULL);
                 else
                 killer->GiveXP(uint32(pow(killed->getLevel(), 2)/2 * PVPExpRate), NULL);
