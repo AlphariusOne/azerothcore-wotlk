@@ -1754,7 +1754,8 @@ void Player::Update(uint32 p_time)
             m_last_area_id = newarea;
 
             if (m_zoneUpdateId != newzone)
-                UpdateZone(newzone, newarea);                // also update area
+                UpdateZone(newzone, newarea);                // also
+
             else
             {
                 // use area updates as well
@@ -7403,6 +7404,10 @@ bool Player::RewardHonor(Unit* uVictim, uint32 groupsize, int32 honor, bool awar
             uint32 itemID = sWorld->getIntConfig(CONFIG_PVP_TOKEN_ID);
             int32 count = sWorld->getIntConfig(CONFIG_PVP_TOKEN_COUNT);
 
+            if (uVictim->getLevel() == 80 && uVictim->GetAreaId() == 616) {
+                itemID = 49426;
+            }
+
             if (AddItem(itemID, count))
                 ChatHandler(GetSession()).PSendSysMessage("You have been awarded a token for slaying another player.");
         }
@@ -7566,6 +7571,11 @@ void Player::UpdateArea(uint32 newArea)
     AreaTableEntry const* area = sAreaTableStore.LookupEntry(newArea);
     bool oldFFAPvPArea = pvpInfo.IsInFFAPvPArea;
     pvpInfo.IsInFFAPvPArea = area && (area->flags & AREA_FLAG_ARENA);
+
+    if (newArea == 616) {
+        pvpInfo.IsInFFAPvPArea = true;
+    }
+
     UpdatePvPState(true);
 
     // xinef: check if we were in ffa arena and we left
@@ -7609,6 +7619,10 @@ void Player::UpdateArea(uint32 newArea)
         isInn |= zone->IsInn(GetTeamId(true));
     }
 
+    if (newArea == 1741 || newArea == 2557) {
+        isSanctuary = true;
+    }
+
     // previously this was in UpdateZone (but after UpdateArea) so nothing will break
     if (isSanctuary)    // in sanctuary
     {
@@ -7618,11 +7632,6 @@ void Player::UpdateArea(uint32 newArea)
     }
     else
         RemoveByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY);
-
-    if (area && area->ID == 616)
-    {
-        SetByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_FFA_PVP);
-    }
 
     if (isInn)
     {
