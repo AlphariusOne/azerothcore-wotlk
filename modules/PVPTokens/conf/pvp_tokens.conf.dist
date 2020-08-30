@@ -1,0 +1,11 @@
+[worldserver]
+
+#
+# Enable gaining tokens for PVP kills
+# default: true
+#
+
+PVPToken.Enable=true
+PVPToken.PVPTokenIDinHyjal=49426
+PVPToken.PVPTokenID=29434
+PVPToken.PVPTokenCount=1
