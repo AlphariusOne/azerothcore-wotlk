@@ -5133,6 +5133,11 @@ void Player::BuildPlayerRepop()
     data.append(GetPackGUID());
     GetSession()->SendPacket(&data);
 
+    if (GetAreaId() == 616) {
+        sScriptMgr->OnPlayerReleasedGhost(this);
+        return;
+    }
+
     if (getRace(true) == RACE_NIGHTELF)
         CastSpell(this, 20584, true);
     CastSpell(this, 8326, true);
@@ -5597,6 +5602,10 @@ uint32 Player::DurabilityRepair(uint16 pos, bool cost, float discountMod, bool g
 
 void Player::RepopAtGraveyard()
 {
+    if (GetAreaId() == 616) {
+        sScriptMgr->OnPlayerReleasedGhost(this);
+        return;
+    }
     // note: this can be called also when the player is alive
     // for example from WorldSession::HandleMovementOpcodes
 
