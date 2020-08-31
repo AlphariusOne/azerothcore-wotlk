@@ -17,6 +17,8 @@ public:
             const uint32 PVPToken = sConfigMgr->GetIntDefault("PvPTokens.PVPTokenID", 29434);
             uint32 count = sConfigMgr->GetIntDefault("PvPTokens.PVPTokenCount", 1);
             uint32 itemID = 29434;
+            if (killer->GetGUID() == killed->GetGUID())
+                return;
             if(killer->InBattleground() || killer->IsFFAPvP()){
                 itemID = PVPToken;
                 if (killed->getLevel() == 80) {
