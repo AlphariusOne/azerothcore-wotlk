@@ -4,12 +4,11 @@
 #include "Config.h"
 #include "Chat.h"
 #include "Unit.h"
-#include <cmath>
 
-class PVPToken : public PlayerScript
+class PVPTokens : public PlayerScript
 {
 public:
-    PVPToken() : PlayerScript("PVPToken") { }
+    PVPTokens() : PlayerScript("PVPTokens") { }
 
     void OnPVPKill(Player* killer, Player* killed) override {
         if (sConfigMgr->GetBoolDefault("PvPTokens.Enable", true)) {
@@ -34,10 +33,10 @@ public:
     }
 };
 
-class PVPTokenConfig : public WorldScript
+class PVPTokensConfig : public WorldScript
 {
 public:
-    PVPTokenConfig() : WorldScript("PVPToken") { }
+    PVPTokensConfig() : WorldScript("PVPToken") { }
 
     void OnBeforeConfigLoad(bool reload) override
     {
@@ -52,6 +51,6 @@ public:
 };
 
 void AddPVPTokensScripts() {
-    new PVPToken();
-    new PVPTokenConfig();
+    new PVPTokens();
+    new PVPTokensConfig();
 }
