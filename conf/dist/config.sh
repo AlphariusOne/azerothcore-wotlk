@@ -47,6 +47,8 @@ CDEBUG=OFF
 CTYPE=Release
 # compile scripts
 CSCRIPTS=ON
+# compile unit tests
+CBUILD_TESTING=OFF
 # compile server
 CSERVERS=ON
 # compile tools
