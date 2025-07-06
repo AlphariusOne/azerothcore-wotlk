@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef OUTDOOR_PVP_SI_
@@ -21,7 +32,12 @@ const uint32 SI_MAX_RESOURCES = 200;
 
 const uint8 OutdoorPvPSIBuffZonesNum = 3;
 
-const uint32 OutdoorPvPSIBuffZones[OutdoorPvPSIBuffZonesNum] = { 1377, 3428, 3429 };
+const uint32 OutdoorPvPSIBuffZones[OutdoorPvPSIBuffZonesNum] =
+{
+    AREA_SILITHUS,
+    AREA_AHN_QIRAJ,
+    AREA_RUINS_OF_AHN_QIRAJ
+};
 
 const uint32 SI_AREATRIGGER_H = 4168;
 
@@ -33,43 +49,33 @@ const uint32 SI_TURNIN_QUEST_CM_H = 18199;
 
 const uint32 SI_SILITHYST_MOUND = 181597;
 
-enum SI_WorldStates
-{
-    SI_GATHERED_A = 2313,
-    SI_GATHERED_H = 2314,
-    SI_SILITHYST_MAX = 2317
-};
-
 class OutdoorPvPSI : public OutdoorPvP
 {
 public:
-
     OutdoorPvPSI();
 
-    bool SetupOutdoorPvP();
+    bool SetupOutdoorPvP() override;
 
-    void HandlePlayerEnterZone(Player* player, uint32 zone);
-    void HandlePlayerLeaveZone(Player* player, uint32 zone);
+    void HandlePlayerEnterZone(Player* player, uint32 zone) override;
+    void HandlePlayerLeaveZone(Player* player, uint32 zone) override;
 
-    bool Update(uint32 diff);
+    bool Update(uint32 diff) override;
 
-    void FillInitialWorldStates(WorldPacket& data);
+    void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override;
 
-    void SendRemoveWorldStates(Player* player);
+    void SendRemoveWorldStates(Player* player) override;
 
-    bool HandleAreaTrigger(Player* player, uint32 trigger);
+    bool HandleAreaTrigger(Player* player, uint32 trigger) override;
 
-    bool HandleDropFlag(Player* player, uint32 spellId);
+    bool HandleDropFlag(Player* player, uint32 spellId) override;
 
-    bool HandleCustomSpell(Player* player, uint32 spellId, GameObject* go);
+    bool HandleCustomSpell(Player* player, uint32 spellId, GameObject* go) override;
 
     void UpdateWorldState();
 
 private:
-
     uint32 m_Gathered_A;
     uint32 m_Gathered_H;
-
     TeamId m_LastController;
 };
 

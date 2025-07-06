@@ -1,14 +1,26 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Common.h"
 #include "GroupMgr.h"
-#include "InstanceSaveMgr.h"
-#include "World.h"
+#include "Common.h"
 #include "DBCStores.h"
+#include "InstanceSaveMgr.h"
+#include "Log.h"
+#include "World.h"
 
 GroupMgr::GroupMgr()
 {
@@ -34,7 +46,7 @@ void GroupMgr::InitGroupIds()
     QueryResult result = CharacterDatabase.Query("SELECT MAX(guid) FROM `groups`");
     if (result)
     {
-        uint32 maxId = (*result)[0].GetUInt32();
+        uint32 maxId = (*result)[0].Get<uint32>();
         _groupIds.resize(maxId + 1);
     }
 }
@@ -50,23 +62,23 @@ void GroupMgr::RegisterGroupId(uint32 groupId)
         ++_nextGroupId;
 }
 
-uint32 GroupMgr::GenerateGroupId()
+ObjectGuid::LowType GroupMgr::GenerateGroupId()
 {
-    uint32 newGroupId = _nextGroupId;
+    ObjectGuid::LowType newGroupId = _nextGroupId;
 
     // find the lowest available id starting from the current _nextGroupId
     while (_nextGroupId < 0xFFFFFFFF && ++_nextGroupId < _groupIds.size() && _groupIds[_nextGroupId]);
 
     if (_nextGroupId == 0xFFFFFFFF)
     {
-        sLog->outError("Group ID overflow!! Can't continue, shutting down server.");
+        LOG_ERROR("server.worldserver", "Group ID overflow!! Can't continue, shutting down server.");
         World::StopNow(ERROR_EXIT_CODE);
     }
 
     return newGroupId;
 }
 
-Group* GroupMgr::GetGroupByGUID(uint32 groupId) const
+Group* GroupMgr::GetGroupByGUID(ObjectGuid::LowType groupId) const
 {
     GroupContainer::const_iterator itr = GroupStore.find(groupId);
     if (itr != GroupStore.end())
@@ -77,12 +89,12 @@ Group* GroupMgr::GetGroupByGUID(uint32 groupId) const
 
 void GroupMgr::AddGroup(Group* group)
 {
-    GroupStore[group->GetLowGUID()] = group;
+    GroupStore[group->GetGUID().GetCounter()] = group;
 }
 
 void GroupMgr::RemoveGroup(Group* group)
 {
-    GroupStore.erase(group->GetLowGUID());
+    GroupStore.erase(group->GetGUID().GetCounter());
 }
 
 void GroupMgr::LoadGroups()
@@ -109,8 +121,8 @@ void GroupMgr::LoadGroups()
 
         if (!result)
         {
-            sLog->outString(">> Loaded 0 group definitions. DB table `groups` is empty!");
-            sLog->outString();
+            LOG_WARN("server.loading", ">> Loaded 0 group definitions. DB table `groups` is empty!");
+            LOG_INFO("server.loading", " ");
         }
         else
         {
@@ -126,17 +138,17 @@ void GroupMgr::LoadGroups()
                 }
                 AddGroup(group);
 
-                RegisterGroupId(group->GetLowGUID());
+                RegisterGroupId(group->GetGUID().GetCounter());
 
                 ++count;
             } while (result->NextRow());
 
-            sLog->outString(">> Loaded %u group definitions in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
-            sLog->outString();
+            LOG_INFO("server.loading", ">> Loaded {} group definitions in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+            LOG_INFO("server.loading", " ");
         }
     }
 
-    sLog->outString("Loading Group members...");
+    LOG_INFO("server.loading", "Loading Group Members...");
     {
         uint32 oldMSTime = getMSTime();
 
@@ -149,8 +161,8 @@ void GroupMgr::LoadGroups()
         QueryResult result = CharacterDatabase.Query("SELECT guid, memberGuid, memberFlags, subgroup, roles FROM group_member ORDER BY guid");
         if (!result)
         {
-            sLog->outString(">> Loaded 0 group members. DB table `group_member` is empty!");
-            sLog->outString();
+            LOG_WARN("server.loading", ">> Loaded 0 group members. DB table `group_member` is empty!");
+            LOG_INFO("server.loading", " ");
         }
         else
         {
@@ -158,18 +170,16 @@ void GroupMgr::LoadGroups()
             do
             {
                 Field* fields = result->Fetch();
-                Group* group = GetGroupByGUID(fields[0].GetUInt32());
+                Group* group = GetGroupByGUID(fields[0].Get<uint32>());
 
                 if (group)
-                    group->LoadMemberFromDB(fields[1].GetUInt32(), fields[2].GetUInt8(), fields[3].GetUInt8(), fields[4].GetUInt8());
-                //else
-                //    sLog->outError("GroupMgr::LoadGroups: Consistency failed, can't find group (storage id: %u)", fields[0].GetUInt32());
+                    group->LoadMemberFromDB(fields[1].Get<uint32>(), fields[2].Get<uint8>(), fields[3].Get<uint8>(), fields[4].Get<uint8>());
 
                 ++count;
             } while (result->NextRow());
 
-            sLog->outString(">> Loaded %u group members in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
-            sLog->outString();
+            LOG_INFO("server.loading", ">> Loaded {} group members in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+            LOG_INFO("server.loading", " ");
         }
     }
 }

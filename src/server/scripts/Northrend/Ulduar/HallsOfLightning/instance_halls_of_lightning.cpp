@@ -1,17 +1,31 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "InstanceMapScript.h"
 #include "ScriptedCreature.h"
 #include "halls_of_lightning.h"
 
 class instance_halls_of_lightning : public InstanceMapScript
 {
 public:
-    instance_halls_of_lightning() : InstanceMapScript("instance_halls_of_lightning", 602) { }
+    instance_halls_of_lightning() : InstanceMapScript("instance_halls_of_lightning", MAP_HALLS_OF_LIGHTNING) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* pMap) const
+    InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
         return new instance_halls_of_lightning_InstanceMapScript(pMap);
     }
@@ -22,52 +36,44 @@ public:
 
         uint32 m_auiEncounter[MAX_ENCOUNTER];
 
-        uint64 m_uiGeneralBjarngrimGUID;
-        uint64 m_uiIonarGUID;
-        uint64 m_uiLokenGUID;
-        uint64 m_uiVolkhanGUID;
+        ObjectGuid m_uiGeneralBjarngrimGUID;
+        ObjectGuid m_uiIonarGUID;
+        ObjectGuid m_uiLokenGUID;
+        ObjectGuid m_uiVolkhanGUID;
 
-        uint64 m_uiBjarngrimDoorGUID;
-        uint64 m_uiVolkhanDoorGUID;
-        uint64 m_uiIonarDoorGUID;
-        uint64 m_uiLokenDoorGUID;
-        uint64 m_uiLokenGlobeGUID;
+        ObjectGuid m_uiBjarngrimDoorGUID;
+        ObjectGuid m_uiVolkhanDoorGUID;
+        ObjectGuid m_uiIonarDoorGUID;
+        ObjectGuid m_uiLokenDoorGUID;
+        ObjectGuid m_uiLokenGlobeGUID;
 
         bool volkhanAchievement;
         bool bjarngrimAchievement;
 
-        void Initialize()
+        void Initialize() override
         {
+            SetHeaders(DataHeader);
             memset(&m_auiEncounter, 0, sizeof(m_auiEncounter));
-
-            m_uiGeneralBjarngrimGUID = 0;
-            m_uiVolkhanGUID       = 0;
-            m_uiIonarGUID           = 0;
-            m_uiLokenGUID           = 0;
-
-            m_uiBjarngrimDoorGUID   = 0;
-            m_uiVolkhanDoorGUID   = 0;
-            m_uiIonarDoorGUID       = 0;
-            m_uiLokenDoorGUID       = 0;
-            m_uiLokenGlobeGUID     = 0;
 
             volkhanAchievement = false;
             bjarngrimAchievement = false;
         }
 
-        bool IsEncounterInProgress() const
+        bool IsEncounterInProgress() const override
         {
             for (uint8 i = 0; i < MAX_ENCOUNTER; ++i)
             {
-                if (m_auiEncounter[i] == IN_PROGRESS)
+                if (m_auiEncounter[i] == IN_PROGRESS && i != TYPE_LOKEN_INTRO)
+                {
                     return true;
+                }
             }
             return false;
         }
 
-        void OnCreatureCreate(Creature* pCreature)
+        void OnCreatureCreate(Creature* pCreature) override
         {
-            switch(pCreature->GetEntry())
+            switch (pCreature->GetEntry())
             {
                 case NPC_BJARNGRIM:
                     m_uiGeneralBjarngrimGUID = pCreature->GetGUID();
@@ -84,9 +90,9 @@ public:
             }
         }
 
-        void OnGameObjectCreate(GameObject* pGo)
+        void OnGameObjectCreate(GameObject* pGo) override
         {
-            switch(pGo->GetEntry())
+            switch (pGo->GetEntry())
             {
                 case GO_BJARNGRIM_DOOR:
                     m_uiBjarngrimDoorGUID = pGo->GetGUID();
@@ -118,9 +124,9 @@ public:
             }
         }
 
-        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const*  /*source*/, Unit const*  /*target*/, uint32  /*miscvalue1*/)
+        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const*  /*source*/, Unit const*  /*target*/, uint32  /*miscvalue1*/) override
         {
-            switch(criteria_id)
+            switch (criteria_id)
             {
                 case 7321: //Shatter Resistant (2042)
                     return volkhanAchievement;
@@ -130,10 +136,10 @@ public:
             return false;
         }
 
-        void SetData(uint32 uiType, uint32 uiData)
+        void SetData(uint32 uiType, uint32 uiData) override
         {
             m_auiEncounter[uiType] = uiData;
-            if( uiType == TYPE_LOKEN_INTRO )
+            if (uiType == TYPE_LOKEN_INTRO)
                 SaveToDB();
 
             // Achievements
@@ -142,10 +148,10 @@ public:
             else if (uiType == DATA_VOLKHAN_ACHIEVEMENT)
                 volkhanAchievement = (bool)uiData;
 
-            if( uiData != DONE )
+            if (uiData != DONE)
                 return;
 
-            switch(uiType)
+            switch (uiType)
             {
                 case TYPE_BJARNGRIM:
                     HandleGameObject(m_uiBjarngrimDoorGUID, true);
@@ -168,62 +174,30 @@ public:
             SaveToDB();
         }
 
-        std::string GetSaveData()
+        void ReadSaveDataMore(std::istringstream& data) override
         {
-            OUT_SAVE_INST_DATA;
-
-            std::ostringstream saveStream;
-            saveStream << "H L " << m_auiEncounter[0] << ' ' << m_auiEncounter[1] << ' '
-                       << m_auiEncounter[2] << ' ' << m_auiEncounter[3] << ' ' << m_auiEncounter[4];
-
-            OUT_SAVE_INST_DATA_COMPLETE;
-            return saveStream.str();
+            data >> m_auiEncounter[0];
+            data >> m_auiEncounter[1];
+            data >> m_auiEncounter[2];
+            data >> m_auiEncounter[3];
         }
 
-
-        void Load(const char* in)
+        void WriteSaveDataMore(std::ostringstream& data) override
         {
-            if (!in)
-            {
-                OUT_LOAD_INST_DATA_FAIL;
-                return;
-            }
-
-            OUT_LOAD_INST_DATA(in);
-
-            char dataHead1, dataHead2;
-            uint32 data0, data1, data2, data3, data4;
-
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2 >> data0 >> data1 >> data2 >> data3 >> data4;
-
-            if (dataHead1 == 'H' && dataHead2 == 'L')
-            {
-                m_auiEncounter[0] = data0;
-                m_auiEncounter[1] = data1;
-                m_auiEncounter[2] = data2;
-                m_auiEncounter[3] = data3;
-                m_auiEncounter[4] = data4;
-
-                for (uint8 i = 0; i < TYPE_LOKEN_INTRO; ++i)
-                    if (m_auiEncounter[i] == IN_PROGRESS)
-                        m_auiEncounter[i] = NOT_STARTED;
-
-                OUT_LOAD_INST_DATA_COMPLETE;
-
-            }
-            else
-                OUT_LOAD_INST_DATA_FAIL;
+            data << m_auiEncounter[0] << ' '
+                << m_auiEncounter[1] << ' '
+                << m_auiEncounter[2] << ' '
+                << m_auiEncounter[3] << ' ';
         }
 
-        uint32 GetData(uint32 uiType) const
+        uint32 GetData(uint32 uiType) const override
         {
             return m_auiEncounter[uiType];
         }
 
-        uint64 GetData64(uint32 uiData) const
+        ObjectGuid GetGuidData(uint32 uiData) const override
         {
-            switch(uiData)
+            switch (uiData)
             {
                 case TYPE_BJARNGRIM:
                     return m_uiGeneralBjarngrimGUID;
@@ -234,7 +208,8 @@ public:
                 case TYPE_LOKEN:
                     return m_uiLokenGUID;
             }
-            return 0;
+
+            return ObjectGuid::Empty;
         }
     };
 };

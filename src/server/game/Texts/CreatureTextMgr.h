@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_CREATURE_TEXT_MGR_H
@@ -11,7 +22,8 @@
 #include "GridNotifiers.h"
 #include "ObjectAccessor.h"
 #include "SharedDefines.h"
-#include "Opcodes.h"
+#include "WorldSession.h"
+#include "WorldSessionMgr.h"
 
 enum CreatureTextRange
 {
@@ -40,7 +52,7 @@ struct CreatureTextEntry
 
 struct CreatureTextLocale
 {
-    StringVector Text;
+    std::vector<std::string> Text;
 };
 
 struct CreatureTextId
@@ -68,7 +80,7 @@ typedef std::map<CreatureTextId, CreatureTextLocale> LocaleCreatureTextMap;
 //used for handling non-repeatable random texts
 typedef std::vector<uint8> CreatureTextRepeatIds;
 typedef std::unordered_map<uint8, CreatureTextRepeatIds> CreatureTextRepeatGroup;
-typedef std::unordered_map<uint64, CreatureTextRepeatGroup> CreatureTextRepeatMap;//guid based
+typedef std::unordered_map<ObjectGuid, CreatureTextRepeatGroup> CreatureTextRepeatMap;//guid based
 
 class CreatureTextMgr
 {
@@ -82,21 +94,21 @@ public:
     void LoadCreatureTextLocales();
     CreatureTextMap  const& GetTextMap() const { return mTextMap; }
 
-    void SendSound(Creature* source, uint32 sound, ChatMsg msgType, WorldObject const* whisperTarget, CreatureTextRange range, TeamId teamId, bool gmOnly);
+    void SendSound(Creature* source, uint32 sound, ChatMsg msgType, WorldObject const* target, CreatureTextRange range, TeamId teamId, bool gmOnly);
     void SendEmote(Unit* source, uint32 emote);
 
     //if sent, returns the 'duration' of the text else 0 if error
-    uint32 SendChat(Creature* source, uint8 textGroup, WorldObject const* whisperTarget = NULL, ChatMsg msgType = CHAT_MSG_ADDON, Language language = LANG_ADDON, CreatureTextRange range = TEXT_RANGE_NORMAL, uint32 sound = 0, TeamId teamId = TEAM_NEUTRAL, bool gmOnly = false, Player* srcPlr = nullptr);
+    uint32 SendChat(Creature* source, uint8 textGroup, WorldObject const* target = nullptr, ChatMsg msgType = CHAT_MSG_ADDON, Language language = LANG_ADDON, CreatureTextRange range = TEXT_RANGE_NORMAL, uint32 sound = 0, TeamId teamId = TEAM_NEUTRAL, bool gmOnly = false, Player* srcPlr = nullptr);
     bool TextExist(uint32 sourceEntry, uint8 textGroup);
     std::string GetLocalizedChatString(uint32 entry, uint8 gender, uint8 textGroup, uint32 id, LocaleConstant locale) const;
 
-    template<class Builder> void SendChatPacket(WorldObject* source, Builder const& builder, ChatMsg msgType, WorldObject const* whisperTarget = NULL, CreatureTextRange range = TEXT_RANGE_NORMAL, TeamId teamId = TEAM_NEUTRAL, bool gmOnly = false) const;
+    template<class Builder> void SendChatPacket(WorldObject* source, Builder const& builder, ChatMsg msgType, WorldObject const* target = nullptr, CreatureTextRange range = TEXT_RANGE_NORMAL, TeamId teamId = TEAM_NEUTRAL, bool gmOnly = false) const;
 
 private:
     CreatureTextRepeatIds GetRepeatGroup(Creature* source, uint8 textGroup);
     void SetRepeatId(Creature* source, uint8 textGroup, uint8 id);
 
-    void SendNonChatPacket(WorldObject* source, WorldPacket* data, ChatMsg msgType, WorldObject const* whisperTarget, CreatureTextRange range, TeamId teamId, bool gmOnly) const;
+    void SendNonChatPacket(WorldObject* source, WorldPacket const* data, ChatMsg msgType, WorldObject const* target, CreatureTextRange range, TeamId teamId, bool gmOnly) const;
     float GetRangeForChatType(ChatMsg msgType) const;
 
     CreatureTextMap mTextMap;
@@ -117,7 +129,7 @@ public:
 
     ~CreatureTextLocalizer()
     {
-        for (size_t i = 0; i < _packetCache.size(); ++i)
+        for (std::size_t i = 0; i < _packetCache.size(); ++i)
         {
             if (_packetCache[i])
                 delete _packetCache[i]->first;
@@ -129,15 +141,14 @@ public:
     {
         LocaleConstant loc_idx = player->GetSession()->GetSessionDbLocaleIndex();
         WorldPacket* messageTemplate;
-        size_t whisperGUIDpos;
+        std::size_t whisperGUIDpos;
 
         // create if not cached yet
         if (!_packetCache[loc_idx])
         {
             messageTemplate = new WorldPacket();
             whisperGUIDpos = _builder(messageTemplate, loc_idx);
-            ASSERT(messageTemplate->GetOpcode() != MSG_NULL_ACTION);
-            _packetCache[loc_idx] = new std::pair<WorldPacket*, size_t>(messageTemplate, whisperGUIDpos);
+            _packetCache[loc_idx] = new std::pair<WorldPacket*, std::size_t>(messageTemplate, whisperGUIDpos);
         }
         else
         {
@@ -150,7 +161,7 @@ public:
         {
             case CHAT_MSG_MONSTER_WHISPER:
             case CHAT_MSG_RAID_BOSS_WHISPER:
-                data.put<uint64>(whisperGUIDpos, player->GetGUID());
+                data.put<uint64>(whisperGUIDpos, player->GetGUID().GetRawValue());
                 break;
             default:
                 break;
@@ -160,13 +171,13 @@ public:
     }
 
 private:
-    std::vector<std::pair<WorldPacket*, size_t>* > _packetCache;
+    std::vector<std::pair<WorldPacket*, std::size_t>* > _packetCache;
     Builder const& _builder;
     ChatMsg _msgType;
 };
 
 template<class Builder>
-void CreatureTextMgr::SendChatPacket(WorldObject* source, Builder const& builder, ChatMsg msgType, WorldObject const* whisperTarget /*= NULL*/, CreatureTextRange range /*= TEXT_RANGE_NORMAL*/, TeamId teamId /*= TEAM_NEUTRAL*/, bool gmOnly /*= false*/) const
+void CreatureTextMgr::SendChatPacket(WorldObject* source, Builder const& builder, ChatMsg msgType, WorldObject const* target /*= nullptr*/, CreatureTextRange range /*= TEXT_RANGE_NORMAL*/, TeamId teamId /*= TEAM_NEUTRAL*/, bool gmOnly /*= false*/) const
 {
     if (!source)
         return;
@@ -178,12 +189,12 @@ void CreatureTextMgr::SendChatPacket(WorldObject* source, Builder const& builder
         case CHAT_MSG_MONSTER_WHISPER:
         case CHAT_MSG_RAID_BOSS_WHISPER:
             {
-                if (range == TEXT_RANGE_NORMAL) //ignores team and gmOnly
+                if (range == TEXT_RANGE_NORMAL) // ignores team and GM only
                 {
-                    if (!whisperTarget || whisperTarget->GetTypeId() != TYPEID_PLAYER)
+                    if (!target || !target->IsPlayer())
                         return;
 
-                    localizer(const_cast<Player*>(whisperTarget->ToPlayer()));
+                    localizer(const_cast<Player*>(target->ToPlayer()));
                     return;
                 }
                 break;
@@ -222,8 +233,8 @@ void CreatureTextMgr::SendChatPacket(WorldObject* source, Builder const& builder
             }
         case TEXT_RANGE_WORLD:
             {
-                SessionMap const& smap = sWorld->GetAllSessions();
-                for (SessionMap::const_iterator itr = smap.begin(); itr != smap.end(); ++itr)
+                WorldSessionMgr::SessionMap const& smap = sWorldSessionMgr->GetAllSessions();
+                for (WorldSessionMgr::SessionMap::const_iterator itr = smap.begin(); itr != smap.end(); ++itr)
                     if (Player* player = itr->second->GetPlayer())
                         if ((teamId == TEAM_NEUTRAL || player->GetTeamId() == teamId) && (!gmOnly || player->IsGameMaster()))
                             localizer(player);
@@ -239,8 +250,8 @@ void CreatureTextMgr::SendChatPacket(WorldObject* source, Builder const& builder
     if (msgType == CHAT_MSG_RAID_BOSS_EMOTE && source->GetMap()->IsDungeon())
         dist = 250.0f;
 
-    acore::PlayerDistWorker<CreatureTextLocalizer<Builder> > worker(source, dist, localizer);
-    source->VisitNearbyWorldObject(dist, worker);
+    Acore::PlayerDistWorker<CreatureTextLocalizer<Builder> > worker(source, dist, localizer);
+    Cell::VisitWorldObjects(source, worker, dist);
 }
 
 #endif

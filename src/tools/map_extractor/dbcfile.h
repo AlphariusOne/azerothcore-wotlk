@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef DBCFILE_H
@@ -9,10 +20,11 @@
 #include <cassert>
 #include <string>
 
+// cppcheck-suppress ctuOneDefinitionRuleViolation
 class DBCFile
 {
 public:
-    DBCFile(const std::string& filename);
+    DBCFile(std::string  filename);
     ~DBCFile();
 
     // Open database. It must be openened before it can be used.
@@ -22,10 +34,9 @@ public:
     class Exception
     {
     public:
-        Exception(const std::string& message): message(message)
+        Exception(std::string  message): message(std::move(message))
         { }
-        virtual ~Exception()
-        { }
+        virtual ~Exception() = default;
         const std::string& getMessage() {return message;}
     private:
         std::string message;
@@ -37,29 +48,29 @@ public:
         { }
     };
     // Iteration over database
-    class Iterator;
-    class Record
+    class Iterator; // cppcheck-suppress ctuOneDefinitionRuleViolation
+    class Record // cppcheck-suppress ctuOneDefinitionRuleViolation
     {
     public:
-        float getFloat(size_t field) const
+        [[nodiscard]] float getFloat(std::size_t field) const
         {
             assert(field < file.fieldCount);
             return *reinterpret_cast<float*>(offset + field * 4);
         }
-        unsigned int getUInt(size_t field) const
+        [[nodiscard]] unsigned int getUInt(std::size_t field) const
         {
             assert(field < file.fieldCount);
             return *reinterpret_cast<unsigned int*>(offset + field * 4);
         }
-        int getInt(size_t field) const
+        [[nodiscard]] int getInt(std::size_t field) const
         {
             assert(field < file.fieldCount);
             return *reinterpret_cast<int*>(offset + field * 4);
         }
-        const char* getString(size_t field) const
+        [[nodiscard]] const char* getString(std::size_t field) const
         {
             assert(field < file.fieldCount);
-            size_t stringOffset = getUInt(field);
+            std::size_t stringOffset = getUInt(field);
             assert(stringOffset < file.stringSize);
             return reinterpret_cast<char*>(file.stringTable + stringOffset);
         }
@@ -104,24 +115,23 @@ public:
     };
 
     // Get record by id
-    Record getRecord(size_t id);
+    Record getRecord(std::size_t id);
     /// Get begin iterator over records
     Iterator begin();
     /// Get begin iterator over records
     Iterator end();
     /// Trivial
-    size_t getRecordCount() const { return recordCount;}
-    size_t getFieldCount() const { return fieldCount; }
-    size_t getMaxId();
+    [[nodiscard]] std::size_t getRecordCount() const { return recordCount;}
+    [[nodiscard]] std::size_t getFieldCount() const { return fieldCount; }
+    std::size_t getMaxId();
 private:
     std::string filename;
-    size_t recordSize;
-    size_t recordCount;
-    size_t fieldCount;
-    size_t stringSize;
+    std::size_t recordSize;
+    std::size_t recordCount;
+    std::size_t fieldCount;
+    std::size_t stringSize;
     unsigned char* data;
     unsigned char* stringTable;
 };
 
 #endif
-

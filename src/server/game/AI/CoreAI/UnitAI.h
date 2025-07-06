@@ -1,45 +1,69 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_UNITAI_H
 #define ACORE_UNITAI_H
 
+#include "Containers.h"
 #include "Define.h"
 #include "Unit.h"
-#include "Containers.h"
 #include <list>
+
+#define CAST_AI(a, b)   (dynamic_cast<a*>(b))
+#define ENSURE_AI(a,b)  (EnsureAI<a>(b))
+
+template<class T, class U>
+T* EnsureAI(U* ai)
+{
+    T* cast_ai = dynamic_cast<T*>(ai);
+    ASSERT(cast_ai);
+    return cast_ai;
+}
 
 class Player;
 class Quest;
 class Unit;
 struct AISpellInfoType;
 
-//Selection method used by SelectTarget
-enum SelectAggroTarget
+// Selection method used by SelectTarget
+enum class SelectTargetMethod
 {
-    SELECT_TARGET_RANDOM = 0,                               //Just selects a random target
-    SELECT_TARGET_TOPAGGRO,                                 //Selects targes from top aggro to bottom
-    SELECT_TARGET_BOTTOMAGGRO,                              //Selects targets from bottom aggro to top
-    SELECT_TARGET_NEAREST,
-    SELECT_TARGET_FARTHEST,
+    Random,      // just pick a random target
+    MaxThreat,   // prefer targets higher in the threat list
+    MinThreat,   // prefer targets lower in the threat list
+    MaxDistance, // prefer targets further from us
+    MinDistance  // prefer targets closer to us
 };
 
 // default predicate function to select target based on distance, player and/or aura criteria
-struct DefaultTargetSelector : public acore::unary_function<Unit*, bool>
+struct DefaultTargetSelector : public Acore::unary_function<Unit*, bool>
 {
-    const Unit* me;
+    Unit const* me;
     float m_dist;
+    Unit const* except;
     bool m_playerOnly;
     int32 m_aura;
 
     // unit: the reference unit
     // dist: if 0: ignored, if > 0: maximum distance to the reference unit, if < 0: minimum distance to the reference unit
     // playerOnly: self explaining
+    // withMainTank: allow current tank to be selected
     // aura: if 0: ignored, if > 0: the target shall have the aura, if < 0, the target shall NOT have the aura
-    DefaultTargetSelector(Unit const* unit, float dist, bool playerOnly, int32 aura) : me(unit), m_dist(dist), m_playerOnly(playerOnly), m_aura(aura) {}
+    DefaultTargetSelector(Unit const* unit, float dist, bool playerOnly, bool withMainTank, int32 aura) : me(unit), m_dist(dist), except(!withMainTank ? me->GetThreatMgr().GetCurrentVictim() : nullptr), m_playerOnly(playerOnly), m_aura(aura) {}
 
     bool operator()(Unit const* target) const
     {
@@ -49,7 +73,10 @@ struct DefaultTargetSelector : public acore::unary_function<Unit*, bool>
         if (!target)
             return false;
 
-        if (m_playerOnly && (target->GetTypeId() != TYPEID_PLAYER))
+        if (target == except)
+            return false;
+
+        if (m_playerOnly && (!target->IsPlayer()))
             return false;
 
         if (m_dist > 0.0f && !me->IsWithinCombatRange(target, m_dist))
@@ -77,8 +104,8 @@ struct DefaultTargetSelector : public acore::unary_function<Unit*, bool>
 };
 
 // Target selector for spell casts checking range, auras and attributes
-// TODO: Add more checks from Spell::CheckCast
-struct SpellTargetSelector : public acore::unary_function<Unit*, bool>
+/// @todo: Add more checks from Spell::CheckCast
+struct SpellTargetSelector : public Acore::unary_function<Unit*, bool>
 {
 public:
     SpellTargetSelector(Unit* caster, uint32 spellId);
@@ -92,7 +119,7 @@ private:
 // Very simple target selector, will just skip main target
 // NOTE: When passing to UnitAI::SelectTarget remember to use 0 as position for random selection
 //       because tank will not be in the temporary list
-struct NonTankTargetSelector : public acore::unary_function<Unit*, bool>
+struct NonTankTargetSelector : public Acore::unary_function<Unit*, bool>
 {
 public:
     NonTankTargetSelector(Creature* source, bool playerOnly = true) : _source(source), _playerOnly(playerOnly) { }
@@ -104,25 +131,28 @@ private:
 };
 
 // Simple selector for units using mana
-struct PowerUsersSelector : public acore::unary_function<Unit*, bool>
+struct PowerUsersSelector : public Acore::unary_function<Unit*, bool>
 {
     Unit const* _me;
     Powers const _power;
     float const _dist;
     bool const _playerOnly;
+    bool const _withTank;
 
-
-    PowerUsersSelector(Unit const* unit, Powers power, float dist, bool playerOnly) : _me(unit), _power(power), _dist(dist), _playerOnly(playerOnly) { }
+    PowerUsersSelector(Unit const* unit, Powers power, float dist, bool playerOnly, bool withTank = true) : _me(unit), _power(power), _dist(dist), _playerOnly(playerOnly), _withTank(withTank) { }
 
     bool operator()(Unit const* target) const
     {
         if (!_me || !target)
             return false;
 
+        if (!_withTank && target == _me->GetThreatMgr().GetCurrentVictim())
+            return false;
+
         if (target->getPowerType() != _power)
             return false;
 
-        if (_playerOnly && target->GetTypeId() != TYPEID_PLAYER)
+        if (_playerOnly && !target->IsPlayer())
             return false;
 
         if (_dist > 0.0f && !_me->IsWithinCombatRange(target, _dist))
@@ -135,19 +165,20 @@ struct PowerUsersSelector : public acore::unary_function<Unit*, bool>
     }
 };
 
-struct FarthestTargetSelector : public acore::unary_function<Unit*, bool>
+// Simple selector based on range and Los
+struct RangeSelector : public Acore::unary_function<Unit*, bool>
 {
-    FarthestTargetSelector(Unit const* unit, float dist, bool playerOnly, bool inLos) : _me(unit), _dist(dist), _playerOnly(playerOnly), _inLos(inLos) {}
+    RangeSelector(Unit const* unit, float maxDist, bool playerOnly, bool inLos, float minDist = 0.f) : _me(unit), _minDist(minDist), _maxDist(maxDist), _playerOnly(playerOnly), _inLos(inLos) {}
 
     bool operator()(Unit const* target) const
     {
         if (!_me || !target)
             return false;
 
-        if (_playerOnly && target->GetTypeId() != TYPEID_PLAYER)
+        if (_playerOnly && !target->IsPlayer())
             return false;
 
-        if (_dist > 0.0f && !_me->IsWithinCombatRange(target, _dist))
+        if (_maxDist > 0.0f && !_me->IsInRange(target, _minDist, _maxDist))
             return false;
 
         if (_inLos && !_me->IsWithinLOSInMap(target))
@@ -157,8 +188,8 @@ struct FarthestTargetSelector : public acore::unary_function<Unit*, bool>
     }
 
 private:
-    const Unit* _me;
-    float _dist;
+    Unit const* _me;
+    float _minDist, _maxDist;
     bool _playerOnly;
     bool _inLos;
 };
@@ -172,132 +203,211 @@ public:
     virtual ~UnitAI() {}
 
     virtual bool CanAIAttack(Unit const* /*target*/) const { return true; }
-    virtual void AttackStart(Unit* /*target*/);
-    virtual void UpdateAI(uint32 diff) = 0;
+    virtual void AttackStart(Unit* /*target*/);    /// @brief Use to start attacking a target. Called just before JustEngagedWith()
+    virtual void UpdateAI(uint32 /*diff*/) = 0;
 
     virtual void InitializeAI() { if (!me->isDead()) Reset(); }
 
     virtual void Reset() {};
 
-    // Called when unit is charmed
+    /// @brief Called when unit is charmed
     virtual void OnCharmed(bool apply) = 0;
 
     // Pass parameters between AI
     virtual void DoAction(int32 /*param*/) {}
     virtual uint32 GetData(uint32 /*id = 0*/) const { return 0; }
     virtual void SetData(uint32 /*id*/, uint32 /*value*/) {}
-    virtual void SetGUID(uint64 /*guid*/, int32 /*id*/ = 0) {}
-    virtual uint64 GetGUID(int32 /*id*/ = 0) const { return 0; }
+    virtual void SetGUID(ObjectGuid /*guid*/, int32 /*id*/ = 0) {}
+    virtual ObjectGuid GetGUID(int32 /*id*/ = 0) const { return ObjectGuid::Empty; }
 
-    Unit* SelectTarget(SelectAggroTarget targetType, uint32 position = 0, float dist = 0.0f, bool playerOnly = false, int32 aura = 0);
-    // Select the targets satifying the predicate.
-    // predicate shall extend acore::unary_function<Unit*, bool>
-    template <class PREDICATE> Unit* SelectTarget(SelectAggroTarget targetType, uint32 position, PREDICATE const& predicate)
+    // Select the best target (in <targetType> order) from the threat list that fulfill the following:
+    // - Not among the first <offset> entries in <targetType> order (or SelectTargetMethod::MaxThreat order,
+    //   if <targetType> is SelectTargetMethod::Random).
+    // - Within at most <dist> yards (if dist > 0.0f)
+    // - At least -<dist> yards away (if dist < 0.0f)
+    // - Is a player (if playerOnly = true)
+    // - Not the current tank (if withTank = false)
+    // - Has aura with ID <aura> (if aura > 0)
+    // - Does not have aura with ID -<aura> (if aura < 0)
+    Unit* SelectTarget(SelectTargetMethod targetType, uint32 position = 0, float dist = 0.0f, bool playerOnly = false, bool withTank = true, int32 aura = 0);
+
+    // Select the best target (in <targetType> order) satisfying <predicate> from the threat list.
+    // If <offset> is nonzero, the first <offset> entries in <targetType> order (or SelectTargetMethod::MaxThreat
+    // order, if <targetType> is SelectTargetMethod::Random) are skipped.
+    template <class PREDICATE>
+    Unit* SelectTarget(SelectTargetMethod targetType, uint32 position, PREDICATE const& predicate)
     {
-        ThreatContainer::StorageType const& threatlist = me->getThreatManager().getThreatList();
-        if (position >= threatlist.size())
+        ThreatMgr& mgr = GetThreatMgr();
+        // shortcut: if we ignore the first <offset> elements, and there are at most <offset> elements, then we ignore ALL elements
+        if (mgr.GetThreatListSize() <= position)
             return nullptr;
 
         std::list<Unit*> targetList;
-        for (ThreatContainer::StorageType::const_iterator itr = threatlist.begin(); itr != threatlist.end(); ++itr)
-            if (predicate((*itr)->getTarget()))
-                targetList.push_back((*itr)->getTarget());
+        SelectTargetList(targetList, mgr.GetThreatListSize(), targetType, position, predicate);
 
-        if (position >= targetList.size())
+        // maybe nothing fulfills the predicate
+        if (targetList.empty())
             return nullptr;
-
-        if (targetType == SELECT_TARGET_NEAREST || targetType == SELECT_TARGET_FARTHEST)
-            targetList.sort(acore::ObjectDistanceOrderPred(me));
 
         switch (targetType)
         {
-            case SELECT_TARGET_NEAREST:
-            case SELECT_TARGET_TOPAGGRO:
-                {
-                    std::list<Unit*>::iterator itr = targetList.begin();
-                    std::advance(itr, position);
-                    return *itr;
-                }
-            case SELECT_TARGET_FARTHEST:
-            case SELECT_TARGET_BOTTOMAGGRO:
-                {
-                    std::list<Unit*>::reverse_iterator ritr = targetList.rbegin();
-                    std::advance(ritr, position);
-                    return *ritr;
-                }
-            case SELECT_TARGET_RANDOM:
-                {
-                    std::list<Unit*>::iterator itr = targetList.begin();
-                    std::advance(itr, urand(position, targetList.size() - 1));
-                    return *itr;
-                }
-            default:
-                break;
+        case SelectTargetMethod::MaxThreat:
+        case SelectTargetMethod::MinThreat:
+        case SelectTargetMethod::MaxDistance:
+        case SelectTargetMethod::MinDistance:
+            return targetList.front();
+        case SelectTargetMethod::Random:
+            return Acore::Containers::SelectRandomContainerElement(targetList);
+        default:
+            return nullptr;
+        }
+    }
+
+    /** @brief Select the best (up to) <num> targets (in <targetType> order) from the threat list that fulfill the following:
+     * - Not among the first <offset> entries in <targetType> order (or SelectTargetMethod::MaxThreat order, if <targetType> is SelectTargetMethod::Random).
+     * - Within at most <dist> yards (if dist > 0.0f)
+     * - At least -<dist> yards away (if dist < 0.0f)
+     * - Is a player (if playerOnly = true)
+     * - Not the current tank (if withTank = false)
+     * - Has aura with ID <aura> (if aura > 0)
+     * - Does not have aura with ID -<aura> (if aura < 0)
+     * The resulting targets are stored in <targetList> (which is cleared first).
+     */
+    void SelectTargetList(std::list<Unit*>& targetList, uint32 num, SelectTargetMethod targetType, uint32 position = 0, float dist = 0.0f, bool playerOnly = false, bool withTank = true, int32 aura = 0);
+
+    // Select the best (up to) <num> targets (in <targetType> order) satisfying <predicate> from the threat list and stores them in <targetList> (which is cleared first).
+    // If <offset> is nonzero, the first <offset> entries in <targetType> order (or SelectTargetMethod::MaxThreat
+    // order, if <targetType> is SelectTargetMethod::Random) are skipped.
+    template <class PREDICATE>
+    void SelectTargetList(std::list<Unit*>& targetList, uint32 num, SelectTargetMethod targetType, uint32 position, PREDICATE const& predicate)
+    {
+        targetList.clear();
+        ThreatMgr& mgr = GetThreatMgr();
+        // shortcut: we're gonna ignore the first <offset> elements, and there's at most <offset> elements, so we ignore them all - nothing to do here
+        if (mgr.GetThreatListSize() <= position)
+            return;
+
+        if (targetType == SelectTargetMethod::MaxDistance || targetType == SelectTargetMethod::MinDistance)
+        {
+            for (ThreatReference const* ref : mgr.GetUnsortedThreatList())
+            {
+                if (ref->IsOffline())
+                    continue;
+
+                targetList.push_back(ref->GetVictim());
+            }
+        }
+        else
+        {
+            for (ThreatReference const* ref : mgr.GetSortedThreatList())
+            {
+                if (ref->IsOffline())
+                    continue;
+
+                targetList.push_back(ref->GetVictim());
+            }
         }
 
-        return nullptr;
-    }
-
-    void SelectTargetList(std::list<Unit*>& targetList, uint32 num, SelectAggroTarget targetType, float dist = 0.0f, bool playerOnly = false, int32 aura = 0);
-
-    // Select the targets satifying the predicate.
-    // predicate shall extend acore::unary_function<Unit*, bool>
-    template <class PREDICATE> void SelectTargetList(std::list<Unit*>& targetList, PREDICATE const& predicate, uint32 maxTargets, SelectAggroTarget targetType)
-    {
-        ThreatContainer::StorageType const& threatlist = me->getThreatManager().getThreatList();
-        if (threatlist.empty())
+        // shortcut: the list isn't gonna get any larger
+        if (targetList.size() <= position)
+        {
+            targetList.clear();
             return;
+        }
 
-        for (ThreatContainer::StorageType::const_iterator itr = threatlist.begin(); itr != threatlist.end(); ++itr)
-            if (predicate((*itr)->getTarget()))
-                targetList.push_back((*itr)->getTarget());
+        // right now, list is unsorted for DISTANCE types - re-sort by SelectTargetMethod::MaxDistance
+        if (targetType == SelectTargetMethod::MaxDistance || targetType == SelectTargetMethod::MinDistance)
+            SortByDistance(targetList, targetType == SelectTargetMethod::MinDistance);
 
-        if (targetList.size() < maxTargets)
-            return;
-
-        if (targetType == SELECT_TARGET_NEAREST || targetType == SELECT_TARGET_FARTHEST)
-            targetList.sort(acore::ObjectDistanceOrderPred(me));
-
-        if (targetType == SELECT_TARGET_FARTHEST || targetType == SELECT_TARGET_BOTTOMAGGRO)
+        // now the list is MAX sorted, reverse for MIN types
+        if (targetType == SelectTargetMethod::MinThreat)
             targetList.reverse();
 
-        if (targetType == SELECT_TARGET_RANDOM)
-            acore::Containers::RandomResizeList(targetList, maxTargets);
+        // ignore the first <offset> elements
+        while (position)
+        {
+            targetList.pop_front();
+            --position;
+        }
+
+        // then finally filter by predicate
+        targetList.remove_if([&predicate](Unit* target) { return !predicate(target); });
+
+        if (targetList.size() <= num)
+            return;
+
+        if (targetType == SelectTargetMethod::Random)
+            Acore::Containers::RandomResize(targetList, num);
         else
-            targetList.resize(maxTargets);
+            targetList.resize(num);
     }
 
-    // Called at any Damage to any victim (before damage apply)
-    virtual void DamageDealt(Unit* /*victim*/, uint32& /*damage*/, DamageEffectType /*damageType*/) { }
+    /**
+     * @brief Called when the unit enters combat
+     * @note NOTE: Creature engage logic should NOT be here, but in JustEngagedWith, which happens once threat is established!)
+     *
+     * @todo Never invoked right now. Preparation for Combat Threat refactor
+     */
+    virtual void JustEnteredCombat(Unit* /*who*/) { }
 
-    // Called at any Damage from any attacker (before damage apply)
-    // Note: it for recalculation damage or special reaction at damage
-    // for attack reaction use AttackedBy called for not DOT damage in Unit::DealDamage also
-    virtual void DamageTaken(Unit* /*attacker*/, uint32& /*damage*/, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/ ) {}
+    /**
+     * @brief Called when the unit leaves combat
+     *
+     * @todo Never invoked right now. Preparation for Combat Threat refactor
+     */
+    virtual void JustExitedCombat() { }
 
-    // Called when the creature receives heal
+    /// @brief Called at any Damage to any victim (before damage apply)
+    virtual void DamageDealt(Unit* /*victim*/, uint32& /*damage*/, DamageEffectType /*damageType*/, SpellSchoolMask /*damageSchoolMask*/) {}
+
+    /** @brief Called at any Damage from any attacker (before damage apply)
+     *
+     *  @note It use for recalculation damage or special reaction at damage
+     *  for attack reaction use AttackedBy called for non DOT damage in Unit::DealDamage also
+     */
+    virtual void DamageTaken(Unit* /*attacker*/, uint32& /*damage*/, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/) {}
+
+    /// @brief Called when the creature receives heal
     virtual void HealReceived(Unit* /*done_by*/, uint32& /*addhealth*/) {}
 
-    // Called when the unit heals
+    /// @brief Called when the creature power updates
+    virtual void OnPowerUpdate(Powers /*power*/, int32 /*updateVal*/, int32 /*gain*/, uint32 /*currPower*/) {}
+
+    /// @brief Called when the unit heals
     virtual void HealDone(Unit* /*done_to*/, uint32& /*addhealth*/) {}
+
+    /// @brief Called during damage calculations
+    virtual void OnCalculateMeleeDamageReceived(uint32& /*damage*/, Unit* /*attacker*/) {}
+    virtual void OnCalculateSpellDamageReceived(int32& /*damage*/, Unit* /*attacker*/) {}
+
+    /// @brief Called during calculation when receiving periodic healing or damage (DoT or HoT)
+    virtual void OnCalculatePeriodicTickReceived(uint32& /*damage*/, Unit* /*attacker*/) {}
 
     void AttackStartCaster(Unit* victim, float dist);
 
-    void DoAddAuraToAllHostilePlayers(uint32 spellid);
-    void DoCast(uint32 spellId);
-    void DoCast(Unit* victim, uint32 spellId, bool triggered = false);
-    inline void DoCastSelf(uint32 spellId, bool triggered = false) { DoCast(me, spellId, triggered); }
-    void DoCastToAllHostilePlayers(uint32 spellid, bool triggered = false);
-    void DoCastVictim(uint32 spellId, bool triggered = false);
-    void DoCastAOE(uint32 spellId, bool triggered = false);
+    SpellCastResult DoAddAuraToAllHostilePlayers(uint32 spellid);
+    SpellCastResult DoCast(uint32 spellId);
+    SpellCastResult DoCast(Unit* victim, uint32 spellId, bool triggered = false);
+    SpellCastResult DoCastSelf(uint32 spellId, bool triggered = false) { return DoCast(me, spellId, triggered); }   /// @brief To specify the caster as target if the spell is self-cast
+    SpellCastResult DoCastToAllHostilePlayers(uint32 spellid, bool triggered = false);
+    SpellCastResult DoCastVictim(uint32 spellId, bool triggered = false);
+    SpellCastResult DoCastAOE(uint32 spellId, bool triggered = false);
+    SpellCastResult DoCastRandomTarget(uint32 spellId, uint32 threatTablePosition = 0, float dist = 0.0f, bool playerOnly = true, bool triggered = false, bool withTank = true);
+
+    /// @brief Cast spell on the top threat target, which may not be the current victim.
+    SpellCastResult DoCastMaxThreat(uint32 spellId, uint32 threatTablePosition = 0, float dist = 0.0f, bool playerOnly = true, bool triggered = false);
 
     float DoGetSpellMaxRange(uint32 spellId, bool positive = false);
 
     void DoMeleeAttackIfReady();
     bool DoSpellAttackIfReady(uint32 spell);
+    void DoSpellAttackToRandomTargetIfReady(uint32 spell, uint32 threatTablePosition = 0, float dist = 0.f, bool playerOnly = true);
 
     static AISpellInfoType* AISpellInfo;
     static void FillAISpellInfo();
+
+    /// @brief Called when a summon reaches a waypoint or point movement finished.
+    virtual void SummonMovementInform(Creature* /*creature*/, uint32 /*motionType*/, uint32 /*point*/) { }
 
     virtual void sGossipHello(Player* /*player*/) {}
     virtual void sGossipSelect(Player* /*player*/, uint32 /*sender*/, uint32 /*action*/) {}
@@ -307,6 +417,12 @@ public:
     virtual void sQuestComplete(Player* /*player*/, Quest const* /*quest*/) {}
     virtual void sQuestReward(Player* /*player*/, Quest const* /*quest*/, uint32 /*opt*/) {}
     virtual void sOnGameEvent(bool /*start*/, uint16 /*eventId*/) {}
+
+    virtual std::string GetDebugInfo() const;
+
+private:
+    ThreatMgr& GetThreatMgr();
+    void SortByDistance(std::list<Unit*>& list, bool ascending = true);
 };
 
 class PlayerAI : public UnitAI
@@ -316,13 +432,13 @@ protected:
 public:
     explicit PlayerAI(Player* player) : UnitAI((Unit*)player), me(player) {}
 
-    void OnCharmed(bool apply);
+    void OnCharmed(bool apply) override;
 };
 
 class SimpleCharmedAI : public PlayerAI
 {
 public:
-    void UpdateAI(uint32 diff);
+    void UpdateAI(uint32 diff) override;
     SimpleCharmedAI(Player* player): PlayerAI(player) {}
 };
 

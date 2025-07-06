@@ -1,27 +1,40 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "InstanceMapScript.h"
 #include "ScriptedCreature.h"
 #include "gundrak.h"
 
 DoorData const doorData[] =
 {
-    { GO_ECK_DOORS,             DATA_MOORABI,           DOOR_TYPE_PASSAGE,  BOUNDARY_NONE },
-    { GO_ECK_UNDERWATER_GATE,   DATA_ECK_THE_FEROCIOUS, DOOR_TYPE_PASSAGE,  BOUNDARY_NONE },
-    { GO_GAL_DARAH_DOORS0,      DATA_GAL_DARAH,         DOOR_TYPE_ROOM,     BOUNDARY_NONE },
-    { GO_GAL_DARAH_DOORS1,      DATA_GAL_DARAH,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE },
-    { GO_GAL_DARAH_DOORS2,      DATA_GAL_DARAH,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE },
-    { 0,                        0,                      DOOR_TYPE_ROOM,     BOUNDARY_NONE }
+    { GO_ECK_DOORS,             DATA_MOORABI,           DOOR_TYPE_PASSAGE },
+    { GO_ECK_UNDERWATER_GATE,   DATA_ECK_THE_FEROCIOUS, DOOR_TYPE_PASSAGE },
+    { GO_GAL_DARAH_DOORS0,      DATA_GAL_DARAH,         DOOR_TYPE_ROOM    },
+    { GO_GAL_DARAH_DOORS1,      DATA_GAL_DARAH,         DOOR_TYPE_PASSAGE },
+    { GO_GAL_DARAH_DOORS2,      DATA_GAL_DARAH,         DOOR_TYPE_PASSAGE },
+    { 0,                        0,                      DOOR_TYPE_ROOM    }
 };
 
 class instance_gundrak : public InstanceMapScript
 {
 public:
-    instance_gundrak() : InstanceMapScript("instance_gundrak", 604) { }
+    instance_gundrak() : InstanceMapScript("instance_gundrak", MAP_GUNDRAK) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* pMap) const
+    InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
         return new instance_gundrak_InstanceMapScript(pMap);
     }
@@ -30,29 +43,26 @@ public:
     {
         instance_gundrak_InstanceMapScript(Map* map) : InstanceScript(map)
         {
+            SetHeaders(DataHeader);
         }
 
-        uint64 _sladRanAltarGUID;
-        uint64 _moorabiAltarGUID;
-        uint64 _drakkariAltarGUID;
-        uint64 _bridgeGUIDs[6];
+        ObjectGuid _sladRanAltarGUID;
+        ObjectGuid _moorabiAltarGUID;
+        ObjectGuid _drakkariAltarGUID;
+        ObjectGuid _bridgeGUIDs[6];
         uint32 _keysInCount;
         uint32 _activateTimer;
 
-        void Initialize()
+        void Initialize() override
         {
             SetBossNumber(MAX_ENCOUNTERS);
             LoadDoorData(doorData);
 
-            _sladRanAltarGUID = 0;
-            _moorabiAltarGUID = 0;
-            _drakkariAltarGUID = 0;
             _keysInCount = 0;
             _activateTimer = 0;
-            memset(&_bridgeGUIDs, 0, sizeof(_bridgeGUIDs));
         }
 
-        void OnGameObjectCreate(GameObject* gameobject)
+        void OnGameObjectCreate(GameObject* gameobject) override
         {
             switch (gameobject->GetEntry())
             {
@@ -97,12 +107,12 @@ public:
                 case GO_GAL_DARAH_DOORS0:
                 case GO_GAL_DARAH_DOORS1:
                 case GO_GAL_DARAH_DOORS2:
-                    AddDoor(gameobject, true);
+                    AddDoor(gameobject);
                     break;
             }
         }
 
-        void OnGameObjectRemove(GameObject* gameobject)
+        void OnGameObjectRemove(GameObject* gameobject) override
         {
             switch (gameobject->GetEntry())
             {
@@ -111,12 +121,12 @@ public:
                 case GO_GAL_DARAH_DOORS0:
                 case GO_GAL_DARAH_DOORS1:
                 case GO_GAL_DARAH_DOORS2:
-                    AddDoor(gameobject, false);
+                    RemoveDoor(gameobject);
                     break;
             }
         }
 
-        void SetData(uint32 type, uint32)
+        void SetData(uint32 type, uint32) override
         {
             switch (type)
             {
@@ -151,7 +161,7 @@ public:
             }
         }
 
-        bool SetBossState(uint32 type, EncounterState state)
+        bool SetBossState(uint32 type, EncounterState state) override
         {
             if (!InstanceScript::SetBossState(type, state))
             {
@@ -167,15 +177,15 @@ public:
             {
                 case DATA_SLAD_RAN:
                     if (GameObject* altar = instance->GetGameObject(_sladRanAltarGUID))
-                        altar->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        altar->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     break;
                 case DATA_MOORABI:
                     if (GameObject* altar = instance->GetGameObject(_moorabiAltarGUID))
-                        altar->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        altar->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     break;
                 case DATA_DRAKKARI_COLOSSUS:
                     if (GameObject* altar = instance->GetGameObject(_drakkariAltarGUID))
-                        altar->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        altar->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     break;
                 case DATA_ECK_THE_FEROCIOUS_INIT:
                     {
@@ -188,35 +198,7 @@ public:
             return true;
         }
 
-        std::string GetSaveData()
-        {
-            std::ostringstream saveStream;
-            saveStream << "G D " << GetBossSaveData();
-            return saveStream.str();
-        }
-
-        void Load(const char* in)
-        {
-            if (!in)
-                return;
-
-            char dataHead1, dataHead2;
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2;
-            if (dataHead1 == 'G' && dataHead2 == 'D')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    uint32 tmpState;
-                    loadStream >> tmpState;
-                    if (tmpState == IN_PROGRESS || tmpState > SPECIAL)
-                        tmpState = NOT_STARTED;
-                    SetBossState(i, EncounterState(tmpState));
-                }
-            }
-        }
-
-        void Update(uint32 diff)
+        void Update(uint32 diff) override
         {
             if (!_activateTimer)
                 return;

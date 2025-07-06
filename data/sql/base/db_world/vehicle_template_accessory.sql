@@ -1,28 +1,44 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `vehicle_template_accessory`
+--
+
 DROP TABLE IF EXISTS `vehicle_template_accessory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `vehicle_template_accessory` 
-(
-  `entry` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `accessory_entry` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `seat_id` tinyint(4) NOT NULL DEFAULT '0',
-  `minion` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `description` text NOT NULL,
-  `summontype` tinyint(3) unsigned NOT NULL DEFAULT '6' COMMENT 'see enum TempSummonType',
-  `summontimer` int(10) unsigned NOT NULL DEFAULT '30000' COMMENT 'timer, only relevant for certain summontypes',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `vehicle_template_accessory` (
+  `entry` int unsigned NOT NULL DEFAULT '0',
+  `accessory_entry` int unsigned NOT NULL DEFAULT '0',
+  `seat_id` tinyint NOT NULL DEFAULT '0',
+  `minion` tinyint unsigned NOT NULL DEFAULT '0',
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `summontype` tinyint unsigned NOT NULL DEFAULT '6' COMMENT 'see enum TempSummonType',
+  `summontimer` int unsigned NOT NULL DEFAULT '30000' COMMENT 'timer, only relevant for certain summontypes',
   PRIMARY KEY (`entry`,`seat_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `vehicle_template_accessory`
+--
 
 LOCK TABLES `vehicle_template_accessory` WRITE;
 /*!40000 ALTER TABLE `vehicle_template_accessory` DISABLE KEYS */;
-INSERT INTO `vehicle_template_accessory` VALUES 
+INSERT INTO `vehicle_template_accessory` VALUES
 (24083,24082,0,0,'Proto-Drake Handler',6,120000),
 (24750,24751,0,1,'Excelsior rides Hidalgo the Master Falconer',6,30000),
 (25762,25760,0,1,'Kvaldir Raider',8,0),
@@ -33,6 +49,7 @@ INSERT INTO `vehicle_template_accessory` VALUES
 (25762,25760,5,1,'Kvaldir Raider',8,0),
 (25762,25760,6,1,'Kvaldir Raider',8,0),
 (25968,25801,0,0,'Nedar, Lord of Rhinos',6,30000),
+(27213,27206,0,0,'Onslaught Warhorse - Onslaught Knight',8,30000),
 (27241,27268,0,0,'Risen Gryphon',6,30000),
 (27587,27163,1,1,'7th Legion Siege Engineer Rides Alliance Steam Tank',5,0),
 (27587,27588,2,1,'7th Legion Elite Rides Alliance Steam Tank',5,0),
@@ -217,10 +234,14 @@ INSERT INTO `vehicle_template_accessory` VALUES
 (40472,40469,3,1,'Orb Carrier',6,30000);
 /*!40000 ALTER TABLE `vehicle_template_accessory` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:34:47
 

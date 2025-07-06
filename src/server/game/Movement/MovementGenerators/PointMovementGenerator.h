@@ -1,21 +1,34 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_POINTMOVEMENTGENERATOR_H
 #define ACORE_POINTMOVEMENTGENERATOR_H
 
+#include "Creature.h"
 #include "MovementGenerator.h"
-#include "FollowerReference.h"
 
 template<class T>
 class PointMovementGenerator : public MovementGeneratorMedium< T, PointMovementGenerator<T> >
 {
 public:
-    PointMovementGenerator(uint32 _id, float _x, float _y, float _z, float _speed = 0.0f, float orientation = 0.0f, const Movement::PointsArray* _path = nullptr, bool generatePath = false, bool forceDestination = false) : id(_id),
-        i_x(_x), i_y(_y), i_z(_z), speed(_speed), i_orientation(orientation), _generatePath(generatePath), _forceDestination(forceDestination)
+    PointMovementGenerator(uint32 _id, float _x, float _y, float _z, float _speed = 0.0f, float orientation = 0.0f, const Movement::PointsArray* _path = nullptr,
+        bool generatePath = false, bool forceDestination = false, ObjectGuid chargeTargetGUID = ObjectGuid::Empty)
+        : id(_id), i_x(_x), i_y(_y), i_z(_z), speed(_speed), i_orientation(orientation), _generatePath(generatePath), _forceDestination(forceDestination),
+        _chargeTargetGUID(chargeTargetGUID)
     {
         if (_path)
             m_precomputedPath = *_path;
@@ -42,6 +55,7 @@ private:
     Movement::PointsArray m_precomputedPath;
     bool _generatePath;
     bool _forceDestination;
+    ObjectGuid _chargeTargetGUID;
 };
 
 class AssistanceMovementGenerator : public PointMovementGenerator<Creature>
@@ -59,11 +73,11 @@ class EffectMovementGenerator : public MovementGenerator
 {
 public:
     explicit EffectMovementGenerator(uint32 Id) : m_Id(Id) {}
-    void Initialize(Unit*) {}
-    void Finalize(Unit*);
-    void Reset(Unit*) {}
-    bool Update(Unit*, uint32);
-    MovementGeneratorType GetMovementGeneratorType() { return EFFECT_MOTION_TYPE; }
+    void Initialize(Unit*) override {}
+    void Finalize(Unit*) override;
+    void Reset(Unit*) override {}
+    bool Update(Unit*, uint32) override;
+    MovementGeneratorType GetMovementGeneratorType() override { return EFFECT_MOTION_TYPE; }
 private:
     uint32 m_Id;
 };

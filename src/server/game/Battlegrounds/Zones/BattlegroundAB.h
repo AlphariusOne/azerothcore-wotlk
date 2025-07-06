@@ -1,11 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: http://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef __BATTLEGROUNDAB_H
 #define __BATTLEGROUNDAB_H
 
 #include "Battleground.h"
+#include "BattlegroundScore.h"
+#include "EventMap.h"
 
 enum BG_AB_Events
 {
@@ -23,46 +38,6 @@ enum BG_AB_Events
 
     BG_AB_EVENT_ALLIANCE_TICK               = 11,
     BG_AB_EVENT_HORDE_TICK                  = 12
-};
-
-enum BG_AB_WorldStates
-{
-    BG_AB_OP_OCCUPIED_BASES_HORDE       = 1778,
-    BG_AB_OP_OCCUPIED_BASES_ALLY        = 1779,
-    BG_AB_OP_RESOURCES_ALLY             = 1776,
-    BG_AB_OP_RESOURCES_HORDE            = 1777,
-    BG_AB_OP_RESOURCES_MAX              = 1780,
-    BG_AB_OP_RESOURCES_WARNING          = 1955,
-
-    BG_AB_OP_STABLE_ICON                = 1842,             //Stable map icon (NONE)
-    BG_AB_OP_STABLE_STATE_ALIENCE       = 1767,             //Stable map state (ALIENCE)
-    BG_AB_OP_STABLE_STATE_HORDE         = 1768,             //Stable map state (HORDE)
-    BG_AB_OP_STABLE_STATE_CON_ALI       = 1769,             //Stable map state (CON ALIENCE)
-    BG_AB_OP_STABLE_STATE_CON_HOR       = 1770,             //Stable map state (CON HORDE)
-
-    BG_AB_OP_FARM_ICON                  = 1845,             //Farm map icon (NONE)
-    BG_AB_OP_FARM_STATE_ALIENCE         = 1772,             //Farm state (ALIENCE)
-    BG_AB_OP_FARM_STATE_HORDE           = 1773,             //Farm state (HORDE)
-    BG_AB_OP_FARM_STATE_CON_ALI         = 1774,             //Farm state (CON ALIENCE)
-    BG_AB_OP_FARM_STATE_CON_HOR         = 1775,             //Farm state (CON HORDE)
-
-    BG_AB_OP_BLACKSMITH_ICON            = 1846,             //Blacksmith map icon (NONE)
-    BG_AB_OP_BLACKSMITH_STATE_ALIENCE   = 1782,             //Blacksmith map state (ALIENCE)
-    BG_AB_OP_BLACKSMITH_STATE_HORDE     = 1783,             //Blacksmith map state (HORDE)
-    BG_AB_OP_BLACKSMITH_STATE_CON_ALI   = 1784,             //Blacksmith map state (CON ALIENCE)
-    BG_AB_OP_BLACKSMITH_STATE_CON_HOR   = 1785,             //Blacksmith map state (CON HORDE)
-
-    BG_AB_OP_LUMBERMILL_ICON            = 1844,             //Lumber Mill map icon (NONE)
-    BG_AB_OP_LUMBERMILL_STATE_ALIENCE   = 1792,             //Lumber Mill map state (ALIENCE)
-    BG_AB_OP_LUMBERMILL_STATE_HORDE     = 1793,             //Lumber Mill map state (HORDE)
-    BG_AB_OP_LUMBERMILL_STATE_CON_ALI   = 1794,             //Lumber Mill map state (CON ALIENCE)
-    BG_AB_OP_LUMBERMILL_STATE_CON_HOR   = 1795,             //Lumber Mill map state (CON HORDE)
-
-    BG_AB_OP_GOLDMINE_ICON              = 1843,             //Gold Mine map icon (NONE)
-    BG_AB_OP_GOLDMINE_STATE_ALIENCE     = 1787,             //Gold Mine map state (ALIENCE)
-    BG_AB_OP_GOLDMINE_STATE_HORDE       = 1788,             //Gold Mine map state (HORDE)
-    BG_AB_OP_GOLDMINE_STATE_CON_ALI     = 1789,             //Gold Mine map state (CON ALIENCE
-    BG_AB_OP_GOLDMINE_STATE_CON_HOR     = 1790,             //Gold Mine map state (CON HORDE)
 };
 
 enum BG_AB_ObjectIds
@@ -133,6 +108,34 @@ enum BG_AB_BattlegroundNodes
     BG_AB_ALL_NODES_COUNT       = 7,                        // all nodes (dynamic and static)
 };
 
+enum BG_AB_BroadcastTexts
+{
+    BG_AB_TEXT_ALLIANCE_NEAR_VICTORY    = 10598,
+    BG_AB_TEXT_HORDE_NEAR_VICTORY       = 10599,
+};
+
+struct ABNodeInfo
+{
+    uint32 NodeId;
+    uint32 TextAllianceAssaulted;
+    uint32 TextHordeAssaulted;
+    uint32 TextAllianceTaken;
+    uint32 TextHordeTaken;
+    uint32 TextAllianceDefended;
+    uint32 TextHordeDefended;
+    uint32 TextAllianceClaims;
+    uint32 TextHordeClaims;
+};
+
+ABNodeInfo const ABNodes[BG_AB_DYNAMIC_NODES_COUNT] =
+{
+    { BG_AB_NODE_STABLES,     10199, 10200, 10203, 10204, 10201, 10202, 10286, 10287 },
+    { BG_AB_NODE_BLACKSMITH,  10211, 10212, 10213, 10214, 10215, 10216, 10290, 10291 },
+    { BG_AB_NODE_FARM,        10217, 10218, 10219, 10220, 10221, 10222, 10288, 10289 },
+    { BG_AB_NODE_LUMBER_MILL, 10224, 10225, 10226, 10227, 10228, 10229, 10284, 10285 },
+    { BG_AB_NODE_GOLD_MINE,   10230, 10231, 10232, 10233, 10234, 10235, 10282, 10283 }
+};
+
 enum BG_AB_NodeStatus
 {
     BG_AB_NODE_STATE_NEUTRAL            = 0,
@@ -149,7 +152,8 @@ enum BG_AB_Sounds
     BG_AB_SOUND_NODE_CAPTURED_HORDE     = 8213,
     BG_AB_SOUND_NODE_ASSAULTED_ALLIANCE = 8212,
     BG_AB_SOUND_NODE_ASSAULTED_HORDE    = 8174,
-    BG_AB_SOUND_NEAR_VICTORY            = 8456
+    BG_AB_SOUND_NEAR_VICTORY_ALLIANCE   = 8456,
+    BG_AB_SOUND_NEAR_VICTORY_HORDE      = 8457
 };
 
 enum BG_AB_Misc
@@ -210,18 +214,40 @@ const float BG_AB_SpiritGuidePos[BG_AB_ALL_NODES_COUNT][4] =
     {714.61f, 646.15f, -10.87f, 4.34f}                      // horde starting base
 };
 
-struct BattlegroundABScore : public BattlegroundScore
+struct BattlegroundABScore final : public BattlegroundScore
 {
-    explicit BattlegroundABScore(Player* player) : BattlegroundScore(player), BasesAssaulted(0), BasesDefended(0) { }
-    ~BattlegroundABScore() override = default;
-    uint32 BasesAssaulted;
-    uint32 BasesDefended;
+    friend class BattlegroundAB;
 
-    uint32 GetAttr1() const final { return BasesAssaulted; }
-    uint32 GetAttr2() const final { return BasesDefended; }
+protected:
+
+    explicit BattlegroundABScore(ObjectGuid playerGuid) : BattlegroundScore(playerGuid) { }
+
+    void UpdateScore(uint32 type, uint32 value) override
+    {
+        switch (type)
+        {
+        case SCORE_BASES_ASSAULTED:
+            BasesAssaulted += value;
+            break;
+        case SCORE_BASES_DEFENDED:
+            BasesDefended += value;
+            break;
+        default:
+            BattlegroundScore::UpdateScore(type, value);
+            break;
+        }
+    }
+
+    void BuildObjectivesBlock(WorldPacket& data) final;
+
+    uint32 GetAttr1() const override { return BasesAssaulted; }
+    uint32 GetAttr2() const override { return BasesDefended; }
+
+    uint32 BasesAssaulted = 0;
+    uint32 BasesDefended = 0;
 };
 
-class BattlegroundAB : public Battleground
+class AC_GAME_API BattlegroundAB : public Battleground
 {
 public:
     BattlegroundAB();
@@ -237,8 +263,8 @@ public:
     void EndBattleground(TeamId winnerTeamId) override;
     GraveyardStruct const* GetClosestGraveyard(Player* player) override;
 
-    void UpdatePlayerScore(Player* player, uint32 type, uint32 value, bool doAddHonor = true) override;
-    void FillInitialWorldStates(WorldPacket& data) override;
+    bool UpdatePlayerScore(Player* player, uint32 type, uint32 value, bool doAddHonor = true) override;
+    void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override;
     void EventPlayerClickedOnFlag(Player* source, GameObject* gameObject) override;
 
     bool AllNodesConrolledByTeam(TeamId teamId) const override;
@@ -273,8 +299,8 @@ private:
     EventMap _bgEvents;
     uint32 _honorTics;
     uint32 _reputationTics;
-    uint8 _controlledPoints[BG_TEAMS_COUNT] {};
-    bool _teamScores500Disadvantage[BG_TEAMS_COUNT] {};
+    uint8 _controlledPoints[PVP_TEAMS_COUNT] {};
+    bool _teamScores500Disadvantage[PVP_TEAMS_COUNT] {};
+    uint32 _configurableMaxTeamScore;
 };
 #endif
-

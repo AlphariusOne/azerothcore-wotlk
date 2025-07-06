@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef _SPELLMGR_H
@@ -10,6 +21,7 @@
 // For static or at-server-startup loaded spell data
 
 #include "Common.h"
+#include "Log.h"
 #include "SharedDefines.h"
 #include "Unit.h"
 
@@ -73,10 +85,9 @@ enum SpellFamilyFlag
     SPELLFAMILYFLAG_DK_DEATH_STRIKE         = 0x00000010,
     SPELLFAMILYFLAG_DK_DEATH_COIL           = 0x00002000,
 
-    // TODO: Figure out a more accurate name for the following familyflag(s)
+    /// @todo: Figure out a more accurate name for the following familyflag(s)
     SPELLFAMILYFLAG_SHAMAN_TOTEM_EFFECTS    = 0x04000000,  // Seems to be linked to most totems and some totem effects
 };
-
 
 #define SPELL_LINKED_MAX_SPELLS  200000
 
@@ -87,7 +98,6 @@ enum SpellLinkedType
     SPELL_LINK_AURA     = 2 * 200000,   // +: aura; -: immune
     SPELL_LINK_REMOVE   = 0,
 };
-
 
 // Spell proc event related declarations (accessed using SpellMgr functions)
 enum ProcFlags
@@ -134,37 +144,37 @@ enum ProcFlags
 
     // flag masks
     AUTO_ATTACK_PROC_FLAG_MASK                = PROC_FLAG_DONE_MELEE_AUTO_ATTACK | PROC_FLAG_TAKEN_MELEE_AUTO_ATTACK
-            | PROC_FLAG_DONE_RANGED_AUTO_ATTACK | PROC_FLAG_TAKEN_RANGED_AUTO_ATTACK,
+                                                | PROC_FLAG_DONE_RANGED_AUTO_ATTACK | PROC_FLAG_TAKEN_RANGED_AUTO_ATTACK,
 
     MELEE_PROC_FLAG_MASK                      = PROC_FLAG_DONE_MELEE_AUTO_ATTACK | PROC_FLAG_TAKEN_MELEE_AUTO_ATTACK
-            | PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_MELEE_DMG_CLASS
-            | PROC_FLAG_DONE_MAINHAND_ATTACK | PROC_FLAG_DONE_OFFHAND_ATTACK,
+                                                | PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_MELEE_DMG_CLASS
+                                                | PROC_FLAG_DONE_MAINHAND_ATTACK | PROC_FLAG_DONE_OFFHAND_ATTACK,
 
     RANGED_PROC_FLAG_MASK                     = PROC_FLAG_DONE_RANGED_AUTO_ATTACK | PROC_FLAG_TAKEN_RANGED_AUTO_ATTACK
-            | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS,
+                                                | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS,
 
     SPELL_PROC_FLAG_MASK                      = PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_MELEE_DMG_CLASS
-            | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS
-            | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS
-            | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG
-            | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS
-            | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG,
+                                                | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS
+                                                | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS
+                                                | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG
+                                                | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS
+                                                | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG,
 
     SPELL_CAST_PROC_FLAG_MASK                  = SPELL_PROC_FLAG_MASK | PROC_FLAG_DONE_TRAP_ACTIVATION | RANGED_PROC_FLAG_MASK,
 
     PERIODIC_PROC_FLAG_MASK                    = PROC_FLAG_DONE_PERIODIC | PROC_FLAG_TAKEN_PERIODIC,
 
     DONE_HIT_PROC_FLAG_MASK                    = PROC_FLAG_DONE_MELEE_AUTO_ATTACK | PROC_FLAG_DONE_RANGED_AUTO_ATTACK
-            | PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS
-            | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG
-            | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG
-            | PROC_FLAG_DONE_PERIODIC | PROC_FLAG_DONE_MAINHAND_ATTACK | PROC_FLAG_DONE_OFFHAND_ATTACK,
+                                                | PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS
+                                                | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG
+                                                | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG
+                                                | PROC_FLAG_DONE_PERIODIC | PROC_FLAG_DONE_MAINHAND_ATTACK | PROC_FLAG_DONE_OFFHAND_ATTACK,
 
     TAKEN_HIT_PROC_FLAG_MASK                   = PROC_FLAG_TAKEN_MELEE_AUTO_ATTACK | PROC_FLAG_TAKEN_RANGED_AUTO_ATTACK
-            | PROC_FLAG_TAKEN_SPELL_MELEE_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS
-            | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG
-            | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG
-            | PROC_FLAG_TAKEN_PERIODIC | PROC_FLAG_TAKEN_DAMAGE,
+                                                | PROC_FLAG_TAKEN_SPELL_MELEE_DMG_CLASS | PROC_FLAG_TAKEN_SPELL_RANGED_DMG_CLASS
+                                                | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG
+                                                | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG
+                                                | PROC_FLAG_TAKEN_PERIODIC | PROC_FLAG_TAKEN_DAMAGE,
 
     REQ_SPELL_PHASE_PROC_FLAG_MASK             = SPELL_PROC_FLAG_MASK & DONE_HIT_PROC_FLAG_MASK,
 };
@@ -194,7 +204,7 @@ enum ProcFlagsExLegacy
     PROC_EX_ABSORB              = 0x0000400,
     PROC_EX_REFLECT             = 0x0000800,
     PROC_EX_INTERRUPT           = 0x0001000,                 // Melee hit result can be Interrupt (not used)
-    PROC_EX_FULL_BLOCK          = 0x0002000,                 // block al attack damage
+    PROC_EX_FULL_BLOCK          = 0x0002000,                 // block all attack damage
     PROC_EX_RESERVED2           = 0x0004000,
     PROC_EX_NOT_ACTIVE_SPELL    = 0x0008000,                 // Spell mustn't do damage/heal to proc
     PROC_EX_EX_TRIGGER_ALWAYS   = 0x0010000,                 // If set trigger always no matter of hit result
@@ -202,6 +212,7 @@ enum ProcFlagsExLegacy
     PROC_EX_ONLY_ACTIVE_SPELL   = 0x0040000,                 // Spell has to do damage/heal to proc
     PROC_EX_NO_OVERHEAL         = 0x0080000,                 // Proc if heal did some work
     PROC_EX_NO_AURA_REFRESH     = 0x0100000,                 // Proc if aura was not refreshed
+    PROC_EX_ONLY_FIRST_TICK     = 0x0200000,                 // Proc only on first tick (in case of periodic spells)
 
     // Flags for internal use - do not use these in db!
     PROC_EX_INTERNAL_CANT_PROC  = 0x0800000,
@@ -252,7 +263,7 @@ enum ProcFlagsHit
     PROC_HIT_REFLECT             = 0x0000800,
     PROC_HIT_INTERRUPT           = 0x0001000, // (not used atm)
     PROC_HIT_FULL_BLOCK          = 0x0002000,
-    PROC_HIT_MASK_ALL = 0x2FFF,
+    PROC_HIT_MASK_ALL            = 0x0002FFF,
 };
 
 enum ProcAttributes
@@ -267,6 +278,7 @@ struct SpellProcEventEntry
     flag96      spellFamilyMask;                            // if nonzero - for matching proc condition based on candidate spell's SpellFamilyFlags  (like auras 107 and 108 do)
     uint32      procFlags;                                  // bitmask for matching proc event
     uint32      procEx;                                     // proc Extend info (see ProcFlagsEx)
+    uint32      procPhase;                                  // proc phase (see ProcFlagsSpellPhase)
     float       ppmRate;                                    // for melee (ranged?) damage spells - proc rate per minute. if zero, falls back to flat chance from Spell.dbc
     float       customChance;                               // Owerride chance (in most cases for debug only)
     uint32      cooldown;                                   // hidden cooldown used for some spell proc events, applied to _triggered_spell_
@@ -276,27 +288,34 @@ typedef std::unordered_map<uint32, SpellProcEventEntry> SpellProcEventMap;
 
 struct SpellProcEntry
 {
-    uint32      schoolMask;                                 // if nonzero - bitmask for matching proc condition based on spell's school
-    uint32      spellFamilyName;                            // if nonzero - for matching proc condition based on candidate spell's SpellFamilyName
-    flag96      spellFamilyMask;                            // if nonzero - bitmask for matching proc condition based on candidate spell's SpellFamilyFlags
-    uint32      typeMask;                                   // if nonzero - owerwrite procFlags field for given Spell.dbc entry, bitmask for matching proc condition, see enum ProcFlags
-    uint32      spellTypeMask;                              // if nonzero - bitmask for matching proc condition based on candidate spell's damage/heal effects, see enum ProcFlagsSpellType
-    uint32      spellPhaseMask;                             // if nonzero - bitmask for matching phase of a spellcast on which proc occurs, see enum ProcFlagsSpellPhase
-    uint32      hitMask;                                    // if nonzero - bitmask for matching proc condition based on hit result, see enum ProcFlagsHit
-    uint32      attributesMask;                             // bitmask, see ProcAttributes
-    float       ratePerMinute;                              // if nonzero - chance to proc is equal to value * aura caster's weapon speed / 60
-    float       chance;                                     // if nonzero - owerwrite procChance field for given Spell.dbc entry, defines chance of proc to occur, not used if perMinuteRate set
-    uint32      cooldown;                                   // if nonzero - cooldown in secs for aura proc, applied to aura
-    uint32      charges;                                    // if nonzero - owerwrite procCharges field for given Spell.dbc entry, defines how many times proc can occur before aura remove, 0 - infinite
+    uint32       SchoolMask;                                 // if nonzero - bitmask for matching proc condition based on spell's school
+    uint32       SpellFamilyName;                            // if nonzero - for matching proc condition based on candidate spell's SpellFamilyName
+    flag96       SpellFamilyMask;                            // if nonzero - bitmask for matching proc condition based on candidate spell's SpellFamilyFlags
+    uint32       ProcFlags;                                  // if nonzero - owerwrite procFlags field for given Spell.dbc entry, bitmask for matching proc condition, see enum ProcFlags
+    uint32       SpellTypeMask;                              // if nonzero - bitmask for matching proc condition based on candidate spell's damage/heal effects, see enum ProcFlagsSpellType
+    uint32       SpellPhaseMask;                             // if nonzero - bitmask for matching phase of a spellcast on which proc occurs, see enum ProcFlagsSpellPhase
+    uint32       HitMask;                                    // if nonzero - bitmask for matching proc condition based on hit result, see enum ProcFlagsHit
+    uint32       AttributesMask;                             // bitmask, see ProcAttributes
+    float        ProcsPerMinute;                             // if nonzero - chance to proc is equal to value * aura caster's weapon speed / 60
+    float        Chance;                                     // if nonzero - owerwrite procChance field for given Spell.dbc entry, defines chance of proc to occur, not used if ProcsPerMinute set
+    Milliseconds Cooldown;                                   // if nonzero - cooldown in secs for aura proc, applied to aura
+    uint32       Charges;                                    // if nonzero - owerwrite procCharges field for given Spell.dbc entry, defines how many times proc can occur before aura remove, 0 - infinite
 };
 
 typedef std::unordered_map<uint32, SpellProcEntry> SpellProcMap;
+
+enum EnchantProcAttributes
+{
+    ENCHANT_PROC_ATTR_EXCLUSIVE     = 0x1, // Only one instance of that effect can be active
+    ENCHANT_PROC_ATTR_WHITE_HIT     = 0x2  // Enchant shall only proc off white hits (not abilities)
+};
 
 struct SpellEnchantProcEntry
 {
     uint32      customChance;
     float       PPMChance;
     uint32      procEx;
+    uint32      attributeMask;
 };
 
 typedef std::unordered_map<uint32, SpellEnchantProcEntry> SpellEnchantProcEventMap;
@@ -313,20 +332,24 @@ typedef std::unordered_map<uint32, SpellBonusEntry>     SpellBonusMap;
 
 enum SpellGroupSpecialFlags
 {
-    SPELL_GROUP_SPECIAL_FLAG_NONE               = 0x000,
-    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_BATTLE      = 0x001,
-    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_GUARDIAN    = 0x002,
-    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_UNSTABLE    = 0x004,
-    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_SHATTRATH   = 0x008,
-    SPELL_GROUP_SPECIAL_FLAG_STACK_EXCLUSIVE_MAX = 0x00F,
-    SPELL_GROUP_SPECIAL_FLAG_FORCED_STRONGEST   = 0x010, // xinef: specially helpful flag if some spells have different auras, but only one should be present
-    SPELL_GROUP_SPECIAL_FLAG_SKIP_STRONGER_CHECK = 0x020,
-    SPELL_GROUP_SPECIAL_FLAG_BASE_AMOUNT_CHECK  = 0x040,
-    SPELL_GROUP_SPECIAL_FLAG_PRIORITY1          = 0x100,
-    SPELL_GROUP_SPECIAL_FLAG_PRIORITY2          = 0x200,
-    SPELL_GROUP_SPECIAL_FLAG_PRIORITY3          = 0x400,
-    SPELL_GROUP_SPECIAL_FLAG_PRIORITY4          = 0x800,
-    SPELL_GROUP_SPECIAL_FLAG_MAX                = 0x1000,
+    SPELL_GROUP_SPECIAL_FLAG_NONE                       = 0x000,
+    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_BATTLE              = 0x001,
+    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_GUARDIAN            = 0x002,
+    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_UNSTABLE            = 0x004,
+    SPELL_GROUP_SPECIAL_FLAG_ELIXIR_SHATTRATH           = 0x008,
+    SPELL_GROUP_SPECIAL_FLAG_STACK_EXCLUSIVE_MAX        = 0x00F,
+    SPELL_GROUP_SPECIAL_FLAG_FORCED_STRONGEST           = 0x010, // xinef: specially helpful flag if some spells have different auras, but only one should be present
+    SPELL_GROUP_SPECIAL_FLAG_SKIP_STRONGER_CHECK        = 0x020,
+    SPELL_GROUP_SPECIAL_FLAG_BASE_AMOUNT_CHECK          = 0x040,
+    SPELL_GROUP_SPECIAL_FLAG_PRIORITY1                  = 0x100,
+    SPELL_GROUP_SPECIAL_FLAG_PRIORITY2                  = 0x200,
+    SPELL_GROUP_SPECIAL_FLAG_PRIORITY3                  = 0x400,
+    SPELL_GROUP_SPECIAL_FLAG_PRIORITY4                  = 0x800,
+    SPELL_GROUP_SPECIAL_FLAG_SAME_SPELL_CHECK           = 0x1000,
+    SPELL_GROUP_SPECIAL_FLAG_SKIP_STRONGER_SAME_SPELL   = 0x2000,
+    SPELL_GROUP_SPECIAL_FLAG_MAX                        = 0x4000,
+
+    SPELL_GROUP_SPECIAL_FLAG_FLASK                      = SPELL_GROUP_SPECIAL_FLAG_ELIXIR_BATTLE | SPELL_GROUP_SPECIAL_FLAG_ELIXIR_GUARDIAN
 };
 
 enum SpellGroupStackFlags
@@ -342,6 +365,11 @@ enum SpellGroupStackFlags
     // Internal use
     SPELL_GROUP_STACK_FLAG_FORCED_STRONGEST     = 0x100,
     SPELL_GROUP_STACK_FLAG_FORCED_WEAKEST       = 0x200,
+};
+
+enum SpellGroupIDs
+{
+    SPELL_GROUP_GUARDIAN_AND_BATTLE_ELIXIRS     = 1
 };
 
 struct SpellStackInfo
@@ -360,7 +388,7 @@ struct SpellThreatEntry
     float       apPctMod;                                   // Pct of AP that is added as Threat - default: 0.0f
 };
 
-typedef std::map<uint32, SpellThreatEntry> SpellThreatMap;
+typedef std::unordered_map<uint32, SpellThreatEntry> SpellThreatMap;
 typedef std::map<uint32, float> SpellMixologyMap;
 
 // coordinates for spells (accessed using SpellMgr functions)
@@ -444,7 +472,7 @@ private:
     typedef std::unordered_map<uint32, uint32> PetAuraMap;
 
 public:
-    PetAura() : removeOnChangePet(false), damage(0)
+    PetAura()
     {
         auras.clear();
     }
@@ -455,7 +483,7 @@ public:
         auras[petEntry] = aura;
     }
 
-    uint32 GetAura(uint32 petEntry) const
+    [[nodiscard]] uint32 GetAura(uint32 petEntry) const
     {
         PetAuraMap::const_iterator itr = auras.find(petEntry);
         if (itr != auras.end())
@@ -471,20 +499,20 @@ public:
         auras[petEntry] = aura;
     }
 
-    bool IsRemovedOnChangePet() const
+    [[nodiscard]] bool IsRemovedOnChangePet() const
     {
         return removeOnChangePet;
     }
 
-    int32 GetDamage() const
+    [[nodiscard]] int32 GetDamage() const
     {
         return damage;
     }
 
 private:
     PetAuraMap auras;
-    bool removeOnChangePet;
-    int32 damage;
+    bool removeOnChangePet{false};
+    int32 damage{0};
 };
 typedef std::map<uint32, PetAura> SpellPetAuraMap;
 
@@ -550,7 +578,7 @@ struct SpellLearnSkillNode
     uint16 maxvalue;                                        // 0  - max skill value for player level
 };
 
-typedef std::map<uint32, SpellLearnSkillNode> SpellLearnSkillMap;
+typedef std::unordered_map<uint32, SpellLearnSkillNode> SpellLearnSkillMap;
 
 typedef std::multimap<uint32, SkillLineAbilityEntry const*> SkillLineAbilityMap;
 typedef std::pair<SkillLineAbilityMap::const_iterator, SkillLineAbilityMap::const_iterator> SkillLineAbilityMapBounds;
@@ -574,6 +602,16 @@ typedef std::vector<bool> EnchantCustomAttribute;
 typedef std::vector<SpellInfo*> SpellInfoMap;
 
 typedef std::map<int32, std::vector<int32> > SpellLinkedMap;
+
+struct SpellCooldownOverride
+{
+    uint32 RecoveryTime;
+    uint32 CategoryRecoveryTime;
+    uint32 StartRecoveryTime;
+    uint32 StartRecoveryCategory;
+};
+
+typedef std::map<uint32, SpellCooldownOverride> SpellCooldownOverrideMap;
 
 bool IsPrimaryProfessionSkill(uint32 skill);
 
@@ -615,88 +653,114 @@ public:
     static bool CheckSpellValid(SpellInfo const* spellInfo, uint32 spellId, bool isTalent);
 
     // Spell difficulty
-    uint32 GetSpellDifficultyId(uint32 spellId) const;
+    [[nodiscard]] uint32 GetSpellDifficultyId(uint32 spellId) const;
     void SetSpellDifficultyId(uint32 spellId, uint32 id);
     uint32 GetSpellIdForDifficulty(uint32 spellId, Unit const* caster) const;
     SpellInfo const* GetSpellForDifficultyFromSpell(SpellInfo const* spell, Unit const* caster) const;
 
     // Spell Ranks table
-    SpellChainNode const* GetSpellChainNode(uint32 spell_id) const;
-    uint32 GetFirstSpellInChain(uint32 spell_id) const;
-    uint32 GetLastSpellInChain(uint32 spell_id) const;
-    uint32 GetNextSpellInChain(uint32 spell_id) const;
-    uint32 GetPrevSpellInChain(uint32 spell_id) const;
-    uint8 GetSpellRank(uint32 spell_id) const;
+    [[nodiscard]] SpellChainNode const* GetSpellChainNode(uint32 spell_id) const;
+    [[nodiscard]] uint32 GetFirstSpellInChain(uint32 spell_id) const;
+    [[nodiscard]] uint32 GetLastSpellInChain(uint32 spell_id) const;
+    [[nodiscard]] uint32 GetNextSpellInChain(uint32 spell_id) const;
+    [[nodiscard]] uint32 GetPrevSpellInChain(uint32 spell_id) const;
+    [[nodiscard]] uint8 GetSpellRank(uint32 spell_id) const;
     // not strict check returns provided spell if rank not avalible
-    uint32 GetSpellWithRank(uint32 spell_id, uint32 rank, bool strict = false) const;
+    [[nodiscard]] uint32 GetSpellWithRank(uint32 spell_id, uint32 rank, bool strict = false) const;
 
     // Spell Required table
-    SpellRequiredMapBounds GetSpellsRequiredForSpellBounds(uint32 spell_id) const;
-    SpellsRequiringSpellMapBounds GetSpellsRequiringSpellBounds(uint32 spell_id) const;
-    bool IsSpellRequiringSpell(uint32 spellid, uint32 req_spellid) const;
+    [[nodiscard]] SpellRequiredMapBounds GetSpellsRequiredForSpellBounds(uint32 spell_id) const;
+    [[nodiscard]] SpellsRequiringSpellMapBounds GetSpellsRequiringSpellBounds(uint32 spell_id) const;
+    [[nodiscard]] bool IsSpellRequiringSpell(uint32 spellid, uint32 req_spellid) const;
 
     // Spell learning
-    SpellLearnSkillNode const* GetSpellLearnSkill(uint32 spell_id) const;
+    [[nodiscard]] SpellLearnSkillNode const* GetSpellLearnSkill(uint32 spell_id) const;
 
     // Spell target coordinates
-    SpellTargetPosition const* GetSpellTargetPosition(uint32 spell_id, SpellEffIndex effIndex) const;
+    [[nodiscard]] SpellTargetPosition const* GetSpellTargetPosition(uint32 spell_id, SpellEffIndex effIndex) const;
 
     // Spell Groups
-    uint32 GetSpellGroup(uint32 spellid) const;
-    SpellGroupSpecialFlags GetSpellGroupSpecialFlags(uint32 spell_id) const;
-    SpellGroupStackFlags GetGroupStackFlags(uint32 groupid) const;
+    [[nodiscard]] uint32 GetSpellGroup(uint32 spellid) const;
+    [[nodiscard]] SpellGroupSpecialFlags GetSpellGroupSpecialFlags(uint32 spell_id) const;
+    [[nodiscard]] SpellGroupStackFlags GetGroupStackFlags(uint32 groupid) const;
     SpellGroupStackFlags CheckSpellGroupStackRules(SpellInfo const* spellInfo1, SpellInfo const* spellInfo2, bool remove, bool areaAura) const;
     void GetSetOfSpellsInSpellGroupWithFlag(uint32 group_id, SpellGroupSpecialFlags flag, std::set<uint32>& availableElixirs) const;
 
     // Spell proc event table
-    SpellProcEventEntry const* GetSpellProcEvent(uint32 spellId) const;
-    bool IsSpellProcEventCanTriggeredBy(SpellInfo const* spellProto, SpellProcEventEntry const* spellProcEvent, uint32 EventProcFlag, SpellInfo const* procSpell, uint32 procFlags, uint32 procExtra, bool active) const;
+    [[nodiscard]] SpellProcEventEntry const* GetSpellProcEvent(uint32 spellId) const;
+    bool IsSpellProcEventCanTriggeredBy(SpellInfo const* spellProto, SpellProcEventEntry const* spellProcEvent, uint32 EventProcFlag, ProcEventInfo const& eventInfo, bool active) const;
 
     // Spell proc table
-    SpellProcEntry const* GetSpellProcEntry(uint32 spellId) const;
+    [[nodiscard]] SpellProcEntry const* GetSpellProcEntry(uint32 spellId) const;
     bool CanSpellTriggerProcOnEvent(SpellProcEntry const& procEntry, ProcEventInfo& eventInfo) const;
 
     // Spell bonus data table
-    SpellBonusEntry const* GetSpellBonusData(uint32 spellId) const;
+    [[nodiscard]] SpellBonusEntry const* GetSpellBonusData(uint32 spellId) const;
 
     // Spell threat table
-    SpellThreatEntry const* GetSpellThreatEntry(uint32 spellID) const;
+    [[nodiscard]] SpellThreatEntry const* GetSpellThreatEntry(uint32 spellID) const;
 
     // Spell mixology table
-    float GetSpellMixologyBonus(uint32 spellId) const;
+    [[nodiscard]] float GetSpellMixologyBonus(uint32 spellId) const;
 
-    SkillLineAbilityMapBounds GetSkillLineAbilityMapBounds(uint32 spell_id) const;
+    [[nodiscard]] SkillLineAbilityMapBounds GetSkillLineAbilityMapBounds(uint32 spell_id) const;
 
-    PetAura const* GetPetAura(uint32 spell_id, uint8 eff) const;
+    [[nodiscard]] PetAura const* GetPetAura(uint32 spell_id, uint8 eff) const;
 
-    SpellEnchantProcEntry const* GetSpellEnchantProcEvent(uint32 enchId) const;
-    bool IsArenaAllowedEnchancment(uint32 ench_id) const;
+    [[nodiscard]] SpellEnchantProcEntry const* GetSpellEnchantProcEvent(uint32 enchId) const;
+    [[nodiscard]] bool IsArenaAllowedEnchancment(uint32 ench_id) const;
 
-    const std::vector<int32>* GetSpellLinked(int32 spell_id) const;
+    [[nodiscard]] const std::vector<int32>* GetSpellLinked(int32 spell_id) const;
 
-    PetLevelupSpellSet const* GetPetLevelupSpellList(uint32 petFamily) const;
-    PetDefaultSpellsEntry const* GetPetDefaultSpellsEntry(int32 id) const;
+    [[nodiscard]] PetLevelupSpellSet const* GetPetLevelupSpellList(uint32 petFamily) const;
+    [[nodiscard]] PetDefaultSpellsEntry const* GetPetDefaultSpellsEntry(int32 id) const;
 
     // Spell area
-    SpellAreaMapBounds GetSpellAreaMapBounds(uint32 spell_id) const;
-    SpellAreaForQuestMapBounds GetSpellAreaForQuestMapBounds(uint32 quest_id) const;
-    SpellAreaForQuestMapBounds GetSpellAreaForQuestEndMapBounds(uint32 quest_id) const;
-    SpellAreaForAuraMapBounds GetSpellAreaForAuraMapBounds(uint32 spell_id) const;
-    SpellAreaForAreaMapBounds GetSpellAreaForAreaMapBounds(uint32 area_id) const;
+    [[nodiscard]] SpellAreaMapBounds GetSpellAreaMapBounds(uint32 spell_id) const;
+    [[nodiscard]] SpellAreaForQuestMapBounds GetSpellAreaForQuestMapBounds(uint32 quest_id) const;
+    [[nodiscard]] SpellAreaForQuestMapBounds GetSpellAreaForQuestEndMapBounds(uint32 quest_id) const;
+    [[nodiscard]] SpellAreaForAuraMapBounds GetSpellAreaForAuraMapBounds(uint32 spell_id) const;
+    [[nodiscard]] SpellAreaForAreaMapBounds GetSpellAreaForAreaMapBounds(uint32 area_id) const;
 
     // SpellInfo object management
-    SpellInfo const* GetSpellInfo(uint32 spellId) const { return spellId < GetSpellInfoStoreSize() ?  mSpellInfoMap[spellId] : nullptr; }
-    uint32 GetSpellInfoStoreSize() const { return mSpellInfoMap.size(); }
+    [[nodiscard]] SpellInfo const* GetSpellInfo(uint32 spellId) const { return spellId < GetSpellInfoStoreSize() ?  mSpellInfoMap[spellId] : nullptr; }
+    // Use this only with 100% valid spellIds
+    [[nodiscard]] SpellInfo const* AssertSpellInfo(uint32 spellId) const
+    {
+        ASSERT(spellId < GetSpellInfoStoreSize());
+        SpellInfo const* spellInfo = mSpellInfoMap[spellId];
+        ASSERT(spellInfo);
+        return spellInfo;
+    }
+    // use this instead of AssertSpellInfo to have the problem logged instead of crashing the server
+    [[nodiscard]] SpellInfo const* CheckSpellInfo(uint32 spellId) const
+    {
+        if (spellId >= GetSpellInfoStoreSize())
+        {
+            LOG_ERROR("server", "spellId {} is not lower than GetSpellInfoStoreSize() ({})", spellId, GetSpellInfoStoreSize());
+            return nullptr;
+        }
+        SpellInfo const* spellInfo = mSpellInfoMap[spellId];
+        if (!spellInfo)
+        {
+            LOG_ERROR("server", "spellId {} has invalid spellInfo", spellId);
+            return nullptr;
+        }
+        return spellInfo;
+    }
+    [[nodiscard]] uint32 GetSpellInfoStoreSize() const { return mSpellInfoMap.size(); }
 
     // Talent Additional Set
-    bool IsAdditionalTalentSpell(uint32 spellId) const;
+    [[nodiscard]] bool IsAdditionalTalentSpell(uint32 spellId) const;
+
+    [[nodiscard]] bool HasSpellCooldownOverride(uint32 spellId) const;
+    [[nodiscard]] SpellCooldownOverride GetSpellCooldownOverride(uint32 spellId) const;
 
 private:
     SpellInfo* _GetSpellInfo(uint32 spellId) { return spellId < GetSpellInfoStoreSize() ? mSpellInfoMap[spellId] : nullptr; }
 
     // Modifiers
 public:
-
     // Loading data at server startup
     void UnloadSpellInfoChains();
     void LoadSpellTalentRanks();
@@ -708,7 +772,7 @@ public:
     void LoadSpellGroupStackRules();
     void LoadSpellProcEvents();
     void LoadSpellProcs();
-    void LoadSpellBonusess();
+    void LoadSpellBonuses();
     void LoadSpellThreats();
     void LoadSpellMixology();
     void LoadSkillLineAbilityMap();
@@ -720,10 +784,11 @@ public:
     void LoadPetDefaultSpells();
     void LoadSpellAreas();
     void LoadSpellInfoStore();
+    void LoadSpellCooldownOverrides();
     void UnloadSpellInfoStore();
     void UnloadSpellInfoImplicitTargetConditionLists();
-    void LoadSpellCustomAttr();
-    void LoadDbcDataCorrections();
+    void LoadSpellInfoCustomAttributes();
+    void LoadSpellInfoCorrections();
     void LoadSpellSpecificAndAuraState();
 
 private:
@@ -753,6 +818,7 @@ private:
     PetLevelupSpellMap         mPetLevelupSpellMap;
     PetDefaultSpellsMap        mPetDefaultSpellsMap;           // only spells not listed in related mPetLevelupSpellMap entry
     SpellInfoMap               mSpellInfoMap;
+    SpellCooldownOverrideMap   mSpellCooldownOverrideMap;
     TalentAdditionalSet        mTalentSpellAdditionalSet;
 };
 

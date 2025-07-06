@@ -1,25 +1,41 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `creature_questitem`
+--
+
 DROP TABLE IF EXISTS `creature_questitem`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `creature_questitem` 
-(
-  `CreatureEntry` int(10) unsigned NOT NULL DEFAULT '0',
-  `Idx` int(10) unsigned NOT NULL DEFAULT '0',
-  `ItemId` int(10) unsigned NOT NULL DEFAULT '0',
-  `VerifiedBuild` smallint(5) NOT NULL DEFAULT '0',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `creature_questitem` (
+  `CreatureEntry` int unsigned NOT NULL DEFAULT '0',
+  `Idx` int unsigned NOT NULL DEFAULT '0',
+  `ItemId` int unsigned NOT NULL DEFAULT '0',
+  `VerifiedBuild` int DEFAULT NULL,
   PRIMARY KEY (`CreatureEntry`,`Idx`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `creature_questitem`
+--
 
 LOCK TABLES `creature_questitem` WRITE;
 /*!40000 ALTER TABLE `creature_questitem` DISABLE KEYS */;
-INSERT INTO `creature_questitem` VALUES 
+INSERT INTO `creature_questitem` VALUES
 (3,0,884,0),
 (3,1,1129,0),
 (38,0,752,0),
@@ -1307,7 +1323,6 @@ INSERT INTO `creature_questitem` VALUES
 (4363,0,5847,0),
 (4364,0,22094,0),
 (4366,0,22094,0),
-(4368,0,22094,0),
 (4370,0,22094,0),
 (4371,0,22094,0),
 (4376,0,5884,0),
@@ -1719,6 +1734,7 @@ INSERT INTO `creature_questitem` VALUES
 (6140,0,10599,0),
 (6140,1,10598,0),
 (6140,2,10600,0),
+(6141,0,5808,0),
 (6146,0,11405,0),
 (6147,0,11405,0),
 (6148,0,11405,0),
@@ -2632,7 +2648,13 @@ INSERT INTO `creature_questitem` VALUES
 (16245,0,22893,0),
 (16246,0,22894,0),
 (16294,0,22487,0),
+(16301,0,22641,0),
+(16302,0,22641,0),
+(16303,0,22642,0),
 (16304,0,22580,0),
+(16305,0,22642,0),
+(16307,0,22642,0),
+(16308,0,22642,0),
 (16310,0,22580,0),
 (16323,0,22566,0),
 (16324,0,22567,0),
@@ -2654,10 +2676,13 @@ INSERT INTO `creature_questitem` VALUES
 (16349,0,22570,0),
 (16350,0,22570,0),
 (16350,1,23707,0),
+(16350,2,22644,0),
 (16351,0,22570,0),
 (16351,1,23707,0),
+(16351,2,22644,0),
 (16352,0,22570,0),
 (16352,1,23707,0),
+(16352,2,22644,0),
 (16353,0,22570,0),
 (16354,0,22570,0),
 (16355,0,22570,0),
@@ -2768,7 +2793,9 @@ INSERT INTO `creature_questitem` VALUES
 (17196,0,23685,0),
 (17198,0,23845,0),
 (17199,0,23845,0),
-(17201,0,23677,0),
+(17200,0,23676,0),
+(17201,0,23676,0),
+(17201,1,23677,0),
 (17206,0,23688,0),
 (17207,0,23681,0),
 (17216,0,23757,0),
@@ -4427,10 +4454,14 @@ INSERT INTO `creature_questitem` VALUES
 (39819,1,3084,0);
 /*!40000 ALTER TABLE `creature_questitem` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:33:36
 

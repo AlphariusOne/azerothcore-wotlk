@@ -1,64 +1,242 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-Name: account_commandscript
-%Complete: 100
-Comment: All account related commands
-Category: commandscripts
-EndScriptData */
-
-#include "ScriptMgr.h"
+#include "AES.h"
 #include "AccountMgr.h"
+#include "Base32.h"
 #include "Chat.h"
-#include "Language.h"
+#include "CommandScript.h"
+#include "CryptoGenerics.h"
+#include "IPLocation.h"
 #include "Player.h"
+#include "Realm.h"
+#include "ScriptMgr.h"
+#include "SecretMgr.h"
+#include "StringConvert.h"
+#include "TOTP.h"
+#include <unordered_map>
+
+#if AC_COMPILER == AC_COMPILER_GNU
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
+using namespace Acore::ChatCommands;
 
 class account_commandscript : public CommandScript
 {
 public:
     account_commandscript() : CommandScript("account_commandscript") { }
 
-    std::vector<ChatCommand> GetCommands() const override
+    ChatCommandTable GetCommands() const override
     {
-        static std::vector<ChatCommand> accountSetCommandTable =
+        static ChatCommandTable accountSetCommandTable =
         {
-            { "addon", SEC_GAMEMASTER, true, &HandleAccountSetAddonCommand, "" },
-            { "gmlevel", SEC_CONSOLE, true, &HandleAccountSetGmLevelCommand, "" },
-            { "password", SEC_CONSOLE, true, &HandleAccountSetPasswordCommand, "" }
+            { "addon",      HandleAccountSetAddonCommand,     SEC_GAMEMASTER, Console::Yes },
+            { "gmlevel",    HandleAccountSetGmLevelCommand,   SEC_ADMINISTRATOR, Console::Yes },
+            { "password",   HandleAccountSetPasswordCommand,  SEC_ADMINISTRATOR, Console::Yes },
+            { "2fa",        HandleAccountSet2FACommand,       SEC_PLAYER,    Console::Yes  },
+            { "email",      HandleAccountSetEmailCommand,     SEC_ADMINISTRATOR, Console::Yes }
         };
-        static std::vector<ChatCommand> accountLockCommandTable
+
+        static ChatCommandTable accountLockCommandTable
         {
-            { "country", SEC_PLAYER, true, &HandleAccountLockCountryCommand, "" },
-            { "ip", SEC_PLAYER, true, &HandleAccountLockIpCommand, "" }
+            { "country",    HandleAccountLockCountryCommand,  SEC_PLAYER,    Console::Yes  },
+            { "ip",         HandleAccountLockIpCommand,       SEC_PLAYER,    Console::Yes  }
         };
-        static std::vector<ChatCommand> accountCommandTable =
+
+        static ChatCommandTable account2faCommandTable
         {
-            { "addon", SEC_MODERATOR, false, &HandleAccountAddonCommand, "" },
-            { "create", SEC_CONSOLE, true, &HandleAccountCreateCommand, "" },
-            { "delete", SEC_CONSOLE, true, &HandleAccountDeleteCommand, "" },
-            { "onlinelist", SEC_CONSOLE, true, &HandleAccountOnlineListCommand, "" },
-            { "lock", SEC_PLAYER, false, nullptr, "", accountLockCommandTable },
-            { "set", SEC_ADMINISTRATOR, true, nullptr, "", accountSetCommandTable },
-            { "password", SEC_PLAYER, false, &HandleAccountPasswordCommand, "" },
-            { "", SEC_PLAYER, false, &HandleAccountCommand, "" }
+            { "setup",      HandleAccount2FASetupCommand,   SEC_PLAYER,    Console::No  },
+            { "remove",     HandleAccount2FARemoveCommand,  SEC_PLAYER,    Console::No  }
         };
-        static std::vector<ChatCommand> commandTable =
+
+        static ChatCommandTable accountRemoveCommandTable
         {
-            { "account", SEC_PLAYER, true, nullptr, "", accountCommandTable }
+            { "country",    HandleAccountRemoveLockCountryCommand,  SEC_ADMINISTRATOR, Console::Yes },
         };
+
+        static ChatCommandTable accountCommandTable =
+        {
+            { "2fa",        account2faCommandTable                                       },
+            { "addon",      HandleAccountAddonCommand,       SEC_MODERATOR, Console::No  },
+            { "create",     HandleAccountCreateCommand,      SEC_CONSOLE,   Console::Yes },
+            { "delete",     HandleAccountDeleteCommand,      SEC_CONSOLE,   Console::Yes },
+            { "onlinelist", HandleAccountOnlineListCommand,  SEC_CONSOLE,   Console::Yes },
+            { "lock",       accountLockCommandTable                                      },
+            { "set",        accountSetCommandTable                                       },
+            { "password",   HandleAccountPasswordCommand,    SEC_PLAYER,    Console::No  },
+            { "remove",     accountRemoveCommandTable                                    },
+            { "",           HandleAccountCommand,            SEC_PLAYER,    Console::No  }
+        };
+
+        static ChatCommandTable commandTable =
+        {
+            { "account", accountCommandTable }
+        };
+
         return commandTable;
+    }
+
+    static bool HandleAccount2FASetupCommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        auto token = Acore::StringTo<uint32>(args);
+
+        auto const& masterKey = sSecretMgr->GetSecret(SECRET_TOTP_MASTER_KEY);
+        if (!masterKey.IsAvailable())
+        {
+            handler->SendErrorMessage(LANG_2FA_COMMANDS_NOT_SETUP);
+            return false;
+        }
+
+        uint32 const accountId = handler->GetSession()->GetAccountId();
+
+        { // check if 2FA already enabled
+            auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_TOTP_SECRET);
+            stmt->SetData(0, accountId);
+            PreparedQueryResult result = LoginDatabase.Query(stmt);
+
+            if (!result)
+            {
+                LOG_ERROR("misc", "Account {} not found in login database when processing .account 2fa setup command.", accountId);
+                handler->SendErrorMessage(LANG_UNKNOWN_ERROR);
+                return false;
+            }
+
+            if (!result->Fetch()->IsNull())
+            {
+                handler->SendErrorMessage(LANG_2FA_ALREADY_SETUP);
+                return false;
+            }
+        }
+
+        // store random suggested secrets
+        static std::unordered_map<uint32, Acore::Crypto::TOTP::Secret> suggestions;
+        auto pair = suggestions.emplace(std::piecewise_construct, std::make_tuple(accountId), std::make_tuple(Acore::Crypto::TOTP::RECOMMENDED_SECRET_LENGTH)); // std::vector 1-argument std::size_t constructor invokes resize
+
+        if (pair.second) // no suggestion yet, generate random secret
+            Acore::Crypto::GetRandomBytes(pair.first->second);
+
+        if (!pair.second && token) // suggestion already existed and token specified - validate
+        {
+            if (Acore::Crypto::TOTP::ValidateToken(pair.first->second, *token))
+            {
+                if (masterKey)
+                    Acore::Crypto::AEEncryptWithRandomIV<Acore::Crypto::AES>(pair.first->second, *masterKey);
+
+                auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_TOTP_SECRET);
+                stmt->SetData(0, pair.first->second);
+                stmt->SetData(1, accountId);
+                LoginDatabase.Execute(stmt);
+
+                suggestions.erase(pair.first);
+                handler->SendSysMessage(LANG_2FA_SETUP_COMPLETE);
+                return true;
+            }
+            else
+                handler->SendSysMessage(LANG_2FA_INVALID_TOKEN);
+        }
+
+        // new suggestion, or no token specified, output TOTP parameters
+        handler->SendErrorMessage(LANG_2FA_SECRET_SUGGESTION, Acore::Encoding::Base32::Encode(pair.first->second).c_str());
+        return false;
+    }
+
+    static bool HandleAccount2FARemoveCommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        auto token = Acore::StringTo<uint32>(args);
+
+        auto const& masterKey = sSecretMgr->GetSecret(SECRET_TOTP_MASTER_KEY);
+        if (!masterKey.IsAvailable())
+        {
+            handler->SendErrorMessage(LANG_2FA_COMMANDS_NOT_SETUP);
+            return false;
+        }
+
+        uint32 const accountId = handler->GetSession()->GetAccountId();
+        Acore::Crypto::TOTP::Secret secret;
+        { // get current TOTP secret
+            auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_TOTP_SECRET);
+            stmt->SetData(0, accountId);
+            PreparedQueryResult result = LoginDatabase.Query(stmt);
+
+            if (!result)
+            {
+                LOG_ERROR("misc", "Account {} not found in login database when processing .account 2fa setup command.", accountId);
+                handler->SendErrorMessage(LANG_UNKNOWN_ERROR);
+                return false;
+            }
+
+            Field* field = result->Fetch();
+            if (field->IsNull())
+            { // 2FA not enabled
+                handler->SendErrorMessage(LANG_2FA_NOT_SETUP);
+                return false;
+            }
+
+            secret = field->Get<Binary>();
+        }
+
+        if (token)
+        {
+            if (masterKey)
+            {
+                bool success = Acore::Crypto::AEDecrypt<Acore::Crypto::AES>(secret, *masterKey);
+                if (!success)
+                {
+                    LOG_ERROR("misc", "Account {} has invalid ciphertext in TOTP token.", accountId);
+                    handler->SendErrorMessage(LANG_UNKNOWN_ERROR);
+                    return false;
+                }
+            }
+
+            if (Acore::Crypto::TOTP::ValidateToken(secret, *token))
+            {
+                auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_TOTP_SECRET);
+                stmt->SetData(0);
+                stmt->SetData(1, accountId);
+                LoginDatabase.Execute(stmt);
+                handler->SendSysMessage(LANG_2FA_REMOVE_COMPLETE);
+                return true;
+            }
+            else
+                handler->SendSysMessage(LANG_2FA_INVALID_TOKEN);
+        }
+
+        handler->SendErrorMessage(LANG_2FA_REMOVE_NEED_TOKEN);
+        return false;
     }
 
     static bool HandleAccountAddonCommand(ChatHandler* handler, char const* args)
     {
         if (!*args)
         {
-            handler->SendSysMessage(LANG_CMD_SYNTAX);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
             return false;
         }
 
@@ -66,22 +244,21 @@ public:
 
         uint32 accountId = handler->GetSession()->GetAccountId();
 
-        int expansion = atoi(exp); //get int anyway (0 if error)
-        if (expansion < 0 || uint8(expansion) > sWorld->getIntConfig(CONFIG_EXPANSION))
+        auto expansion = Acore::StringTo<uint8>(exp); //get int anyway (0 if error)
+        if (!expansion || *expansion > sWorld->getIntConfig(CONFIG_EXPANSION))
         {
-            handler->SendSysMessage(LANG_IMPROPER_VALUE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_IMPROPER_VALUE);
             return false;
         }
 
-        PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_EXPANSION);
+        LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_EXPANSION);
 
-        stmt->setUInt8(0, uint8(expansion));
-        stmt->setUInt32(1, accountId);
+        stmt->SetData(0, *expansion);
+        stmt->SetData(1, accountId);
 
         LoginDatabase.Execute(stmt);
 
-        handler->PSendSysMessage(LANG_ACCOUNT_ADDON, expansion);
+        handler->PSendSysMessage(LANG_ACCOUNT_ADDON, *expansion);
         return true;
     }
 
@@ -94,40 +271,40 @@ public:
         ///- %Parse the command line arguments
         char* accountName = strtok((char*)args, " ");
         char* password = strtok(nullptr, " ");
+        char* email = strtok(nullptr, " ");
+
         if (!accountName || !password)
             return false;
 
-        AccountOpResult result = AccountMgr::CreateAccount(std::string(accountName), std::string(password));
+        // if email is not specified, use empty string
+        std::string emailStr = email ? email : "";
+
+        AccountOpResult result = AccountMgr::CreateAccount(std::string(accountName), std::string(password), emailStr);
         switch (result)
         {
             case AOR_OK:
                 handler->PSendSysMessage(LANG_ACCOUNT_CREATED, accountName);
                 if (handler->GetSession())
                 {
-                    sLog->outDebug(LOG_FILTER_WARDEN, "Account: %d (IP: %s) Character:[%s] (GUID: %u) Change Password.",
-                                   handler->GetSession()->GetAccountId(), handler->GetSession()->GetRemoteAddress().c_str(),
-                                   handler->GetSession()->GetPlayer()->GetName().c_str(), handler->GetSession()->GetPlayer()->GetGUIDLow());
+                    LOG_DEBUG("warden", "Account: {} (IP: {}) Character:[{}] ({}) Change Password.",
+                                   handler->GetSession()->GetAccountId(), handler->GetSession()->GetRemoteAddress(),
+                                   handler->GetSession()->GetPlayer()->GetName(), handler->GetSession()->GetPlayer()->GetGUID().ToString());
                 }
                 break;
             case AOR_NAME_TOO_LONG:
-                handler->SendSysMessage(LANG_ACCOUNT_TOO_LONG);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_TOO_LONG);
                 return false;
             case AOR_PASS_TOO_LONG:
-                handler->SendSysMessage(LANG_ACCOUNT_PASS_TOO_LONG);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_PASS_TOO_LONG);
                 return false;
-            case AOR_NAME_ALREDY_EXIST:
-                handler->SendSysMessage(LANG_ACCOUNT_ALREADY_EXIST);
-                handler->SetSentErrorMessage(true);
+            case AOR_NAME_ALREADY_EXIST:
+                handler->SendErrorMessage(LANG_ACCOUNT_ALREADY_EXIST);
                 return false;
             case AOR_DB_INTERNAL_ERROR:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_CREATED_SQL_ERROR, accountName);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_CREATED_SQL_ERROR, accountName);
                 return false;
             default:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_CREATED, accountName);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_CREATED, accountName);
                 return false;
         }
 
@@ -149,16 +326,14 @@ public:
         std::string accountName = account;
         if (!Utf8ToUpperOnlyLatin(accountName))
         {
-            handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
             return false;
         }
 
         uint32 accountId = AccountMgr::GetId(accountName);
         if (!accountId)
         {
-            handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
             return false;
         }
 
@@ -172,19 +347,16 @@ public:
         switch (result)
         {
             case AOR_OK:
-                handler->PSendSysMessage(LANG_ACCOUNT_DELETED, accountName.c_str());
+                handler->PSendSysMessage(LANG_ACCOUNT_DELETED, accountName);
                 break;
             case AOR_NAME_NOT_EXIST:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
                 return false;
             case AOR_DB_INTERNAL_ERROR:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_DELETED_SQL_ERROR, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_DELETED_SQL_ERROR, accountName.c_str());
                 return false;
             default:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_DELETED, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_DELETED, accountName.c_str());
                 return false;
         }
 
@@ -195,7 +367,7 @@ public:
     static bool HandleAccountOnlineListCommand(ChatHandler* handler, char const* /*args*/)
     {
         ///- Get the list of accounts ID logged to the realm
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_ONLINE);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_ONLINE);
 
         PreparedQueryResult result = CharacterDatabase.Query(stmt);
 
@@ -214,28 +386,64 @@ public:
         do
         {
             Field* fieldsDB = result->Fetch();
-            std::string name = fieldsDB[0].GetString();
-            uint32 account = fieldsDB[1].GetUInt32();
+            std::string name = fieldsDB[0].Get<std::string>();
+            uint32 account = fieldsDB[1].Get<uint32>();
 
             ///- Get the username, last IP and GM level of each account
             // No SQL injection. account is uint32.
-            stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_INFO);
-            stmt->setUInt32(0, account);
-            PreparedQueryResult resultLogin = LoginDatabase.Query(stmt);
+            LoginDatabasePreparedStatement* loginStmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_INFO);
+            loginStmt->SetData(0, account);
+            PreparedQueryResult resultLogin = LoginDatabase.Query(loginStmt);
 
             if (resultLogin)
             {
                 Field* fieldsLogin = resultLogin->Fetch();
                 handler->PSendSysMessage(LANG_ACCOUNT_LIST_LINE,
-                                         fieldsLogin[0].GetCString(), name.c_str(), fieldsLogin[1].GetCString(),
-                                         fieldsDB[2].GetUInt16(), fieldsDB[3].GetUInt16(), fieldsLogin[3].GetUInt8(),
-                                         fieldsLogin[2].GetUInt8());
+                                         fieldsLogin[0].Get<std::string>(), name, fieldsLogin[1].Get<std::string>(),
+                                         fieldsDB[2].Get<uint16>(), fieldsDB[3].Get<uint16>(), fieldsLogin[3].Get<uint8>(),
+                                         fieldsLogin[2].Get<uint8>());
             }
             else
-                handler->PSendSysMessage(LANG_ACCOUNT_LIST_ERROR, name.c_str());
+                handler->PSendSysMessage(LANG_ACCOUNT_LIST_ERROR, name);
         } while (result->NextRow());
 
         handler->SendSysMessage(LANG_ACCOUNT_LIST_BAR);
+        return true;
+    }
+
+    static bool HandleAccountRemoveLockCountryCommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        ///- %Parse the command line arguments
+        char* _accountName = strtok((char*)args, " ");
+        if (!_accountName)
+            return false;
+
+        std::string accountName = _accountName;
+        if (!Utf8ToUpperOnlyLatin(accountName))
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        uint32 accountId = AccountMgr::GetId(accountName);
+        if (!accountId)
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK_COUNTRY);
+        stmt->SetData(0, "00");
+        stmt->SetData(1, accountId);
+        LoginDatabase.Execute(stmt);
+        handler->PSendSysMessage(LANG_COMMAND_ACCLOCKUNLOCKED);
+
         return true;
     }
 
@@ -243,8 +451,7 @@ public:
     {
         if (!*args)
         {
-            handler->SendSysMessage(LANG_USE_BOL);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_USE_BOL);
             return false;
         }
 
@@ -254,40 +461,32 @@ public:
         {
             if (param == "on")
             {
-                PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_LOGON_COUNTRY);
-                uint32 ip = inet_addr(handler->GetSession()->GetRemoteAddress().c_str());
-                EndianConvertReverse(ip);
-                stmt->setUInt32(0, ip);
-                PreparedQueryResult result = LoginDatabase.Query(stmt);
-                if (result)
+                if (IpLocationRecord const* location = sIPLocation->GetLocationRecord(handler->GetSession()->GetRemoteAddress()))
                 {
-                    Field* fields = result->Fetch();
-                    std::string country = fields[0].GetString();
-                    stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK_CONTRY);
-                    stmt->setString(0, country);
-                    stmt->setUInt32(1, handler->GetSession()->GetAccountId());
+                    auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK_COUNTRY);
+                    stmt->SetData(0, location->CountryCode);
+                    stmt->SetData(1, handler->GetSession()->GetAccountId());
                     LoginDatabase.Execute(stmt);
                     handler->PSendSysMessage(LANG_COMMAND_ACCLOCKLOCKED);
                 }
                 else
                 {
-                    handler->PSendSysMessage("[IP2NATION] Table empty");
-                    ;//sLog->outDebug(LOG_FILTER_NETWORKIO, "[IP2NATION] Table empty");
+                    handler->SendErrorMessage("No IP2Location information - account not locked");
+                    return false;
                 }
             }
             else if (param == "off")
             {
-                PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK_CONTRY);
-                stmt->setString(0, "00");
-                stmt->setUInt32(1, handler->GetSession()->GetAccountId());
+                auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK_COUNTRY);
+                stmt->SetData(0, "00");
+                stmt->SetData(1, handler->GetSession()->GetAccountId());
                 LoginDatabase.Execute(stmt);
                 handler->PSendSysMessage(LANG_COMMAND_ACCLOCKUNLOCKED);
             }
             return true;
         }
 
-        handler->SendSysMessage(LANG_USE_BOL);
-        handler->SetSentErrorMessage(true);
+        handler->SendErrorMessage(LANG_USE_BOL);
         return false;
     }
 
@@ -295,8 +494,7 @@ public:
     {
         if (!*args)
         {
-            handler->SendSysMessage(LANG_USE_BOL);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_USE_BOL);
             return false;
         }
 
@@ -304,27 +502,26 @@ public:
 
         if (!param.empty())
         {
-            PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK);
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_LOCK);
 
             if (param == "on")
             {
-                stmt->setBool(0, true);                                     // locked
+                stmt->SetData(0, true);                                     // locked
                 handler->PSendSysMessage(LANG_COMMAND_ACCLOCKLOCKED);
             }
             else if (param == "off")
             {
-                stmt->setBool(0, false);                                    // unlocked
+                stmt->SetData(0, false);                                    // unlocked
                 handler->PSendSysMessage(LANG_COMMAND_ACCLOCKUNLOCKED);
             }
 
-            stmt->setUInt32(1, handler->GetSession()->GetAccountId());
+            stmt->SetData(1, handler->GetSession()->GetAccountId());
 
             LoginDatabase.Execute(stmt);
             return true;
         }
 
-        handler->SendSysMessage(LANG_USE_BOL);
-        handler->SetSentErrorMessage(true);
+        handler->SendErrorMessage(LANG_USE_BOL);
         return false;
     }
 
@@ -332,8 +529,7 @@ public:
     {
         if (!*args)
         {
-            handler->SendSysMessage(LANG_CMD_SYNTAX);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
             return false;
         }
 
@@ -343,24 +539,21 @@ public:
 
         if (!oldPassword || !newPassword || !passwordConfirmation)
         {
-            handler->SendSysMessage(LANG_CMD_SYNTAX);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
             return false;
         }
 
         if (!AccountMgr::CheckPassword(handler->GetSession()->GetAccountId(), std::string(oldPassword)))
         {
-            handler->SendSysMessage(LANG_COMMAND_WRONGOLDPASSWORD);
+            handler->SendErrorMessage(LANG_COMMAND_WRONGOLDPASSWORD);
             sScriptMgr->OnFailedPasswordChange(handler->GetSession()->GetAccountId());
-            handler->SetSentErrorMessage(true);
             return false;
         }
 
         if (strcmp(newPassword, passwordConfirmation) != 0)
         {
-            handler->SendSysMessage(LANG_NEW_PASSWORDS_NOT_MATCH);
+            handler->SendErrorMessage(LANG_NEW_PASSWORDS_NOT_MATCH);
             sScriptMgr->OnFailedPasswordChange(handler->GetSession()->GetAccountId());
-            handler->SetSentErrorMessage(true);
             return false;
         }
 
@@ -372,16 +565,92 @@ public:
                 sScriptMgr->OnPasswordChange(handler->GetSession()->GetAccountId());
                 break;
             case AOR_PASS_TOO_LONG:
-                handler->SendSysMessage(LANG_PASSWORD_TOO_LONG);
+                handler->SendErrorMessage(LANG_PASSWORD_TOO_LONG);
                 sScriptMgr->OnFailedPasswordChange(handler->GetSession()->GetAccountId());
-                handler->SetSentErrorMessage(true);
                 return false;
             default:
-                handler->SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
                 return false;
         }
 
+        return true;
+    }
+
+    static bool HandleAccountSet2FACommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        char* _account = strtok((char*)args, " ");
+        char* _secret = strtok(nullptr, " ");
+
+        if (!_account || !_secret)
+        {
+            handler->SendErrorMessage(LANG_CMD_SYNTAX);
+            return false;
+        }
+
+        std::string accountName = _account;
+        std::string secret = _secret;
+
+        if (!Utf8ToUpperOnlyLatin(accountName))
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        uint32 targetAccountId = AccountMgr::GetId(accountName);
+        if (!targetAccountId)
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        if (handler->HasLowerSecurityAccount(nullptr, targetAccountId, true))
+            return false;
+
+        if (secret == "off")
+        {
+            auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_TOTP_SECRET);
+            stmt->SetData(0);
+            stmt->SetData(1, targetAccountId);
+            LoginDatabase.Execute(stmt);
+            handler->PSendSysMessage(LANG_2FA_REMOVE_COMPLETE);
+            return true;
+        }
+
+        auto const& masterKey = sSecretMgr->GetSecret(SECRET_TOTP_MASTER_KEY);
+        if (!masterKey.IsAvailable())
+        {
+            handler->SendErrorMessage(LANG_2FA_COMMANDS_NOT_SETUP);
+            return false;
+        }
+
+        Optional<std::vector<uint8>> decoded = Acore::Encoding::Base32::Decode(secret);
+        if (!decoded)
+        {
+            handler->SendErrorMessage(LANG_2FA_SECRET_INVALID);
+            return false;
+        }
+
+        if (128 < (decoded->size() + Acore::Crypto::AES::IV_SIZE_BYTES + Acore::Crypto::AES::TAG_SIZE_BYTES))
+        {
+            handler->SendErrorMessage(LANG_2FA_SECRET_TOO_LONG);
+            return false;
+        }
+
+        if (masterKey)
+            Acore::Crypto::AEEncryptWithRandomIV<Acore::Crypto::AES>(*decoded, *masterKey);
+
+        auto* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_TOTP_SECRET);
+        stmt->SetData(0, *decoded);
+        stmt->SetData(1, targetAccountId);
+        LoginDatabase.Execute(stmt);
+
+        handler->PSendSysMessage(LANG_2FA_SECRET_SET_COMPLETE, accountName);
         return true;
     }
 
@@ -421,16 +690,14 @@ public:
             accountName = account;
             if (!Utf8ToUpperOnlyLatin(accountName))
             {
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
                 return false;
             }
 
             accountId = AccountMgr::GetId(accountName);
             if (!accountId)
             {
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
                 return false;
             }
         }
@@ -441,18 +708,18 @@ public:
                 handler->HasLowerSecurityAccount(nullptr, accountId, true))
             return false;
 
-        int expansion = atoi(exp); //get int anyway (0 if error)
-        if (expansion < 0 || uint8(expansion) > sWorld->getIntConfig(CONFIG_EXPANSION))
+        auto expansion = Acore::StringTo<uint8>(exp); //get int anyway (0 if error)
+        if (!expansion || *expansion > sWorld->getIntConfig(CONFIG_EXPANSION))
             return false;
 
-        PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_EXPANSION);
+        LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_UPD_EXPANSION);
 
-        stmt->setUInt8(0, expansion);
-        stmt->setUInt32(1, accountId);
+        stmt->SetData(0, *expansion);
+        stmt->SetData(1, accountId);
 
         LoginDatabase.Execute(stmt);
 
-        handler->PSendSysMessage(LANG_ACCOUNT_SETADDON, accountName.c_str(), accountId, expansion);
+        handler->PSendSysMessage(LANG_ACCOUNT_SETADDON, accountName, accountId, *expansion);
         return true;
     }
 
@@ -487,24 +754,22 @@ public:
             targetAccountName = arg1;
             if (!Utf8ToUpperOnlyLatin(targetAccountName))
             {
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, targetAccountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, targetAccountName);
                 return false;
             }
         }
 
         // Check for invalid specified GM level.
-        gm = (isAccountNameGiven) ? atoi(arg2) : atoi(arg1);
+        gm = (isAccountNameGiven) ? Acore::StringTo<int32>(arg2).value_or(0) : Acore::StringTo<int32>(arg1).value_or(0);
         if (gm > SEC_CONSOLE)
         {
-            handler->SendSysMessage(LANG_BAD_VALUE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_BAD_VALUE);
             return false;
         }
 
         // handler->getSession() == nullptr only for console
         targetAccountId = (isAccountNameGiven) ? AccountMgr::GetId(targetAccountName) : handler->getSelectedPlayer()->GetSession()->GetAccountId();
-        int32 gmRealmID = (isAccountNameGiven) ? atoi(arg3) : atoi(arg2);
+        int32 gmRealmID = (isAccountNameGiven) ? Acore::StringTo<int32>(arg3).value_or(0) : Acore::StringTo<int32>(arg2).value_or(0);
         uint32 playerSecurity;
         if (handler->GetSession())
             playerSecurity = AccountMgr::GetSecurity(handler->GetSession()->GetAccountId(), gmRealmID);
@@ -516,52 +781,47 @@ public:
         targetSecurity = AccountMgr::GetSecurity(targetAccountId, gmRealmID);
         if (targetSecurity >= playerSecurity || gm >= playerSecurity)
         {
-            handler->SendSysMessage(LANG_YOURS_SECURITY_IS_LOW);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_YOURS_SECURITY_IS_LOW);
             return false;
         }
 
         // Check and abort if the target gm has a higher rank on one of the realms and the new realm is -1
         if (gmRealmID == -1 && !AccountMgr::IsConsoleAccount(playerSecurity))
         {
-            PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_ACCESS_GMLEVEL_TEST);
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_ACCESS_GMLEVEL_TEST);
 
-            stmt->setUInt32(0, targetAccountId);
-            stmt->setUInt8(1, uint8(gm));
+            stmt->SetData(0, targetAccountId);
+            stmt->SetData(1, uint8(gm));
 
             PreparedQueryResult result = LoginDatabase.Query(stmt);
 
             if (result)
             {
-                handler->SendSysMessage(LANG_YOURS_SECURITY_IS_LOW);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_YOURS_SECURITY_IS_LOW);
                 return false;
             }
         }
 
-        // Check if provided realmID has a negative value other than -1
+        // Check if provided realm.Id.Realm has a negative value other than -1
         if (gmRealmID < -1)
         {
-            handler->SendSysMessage(LANG_INVALID_REALMID);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_INVALID_REALMID);
             return false;
         }
 
-        // If gmRealmID is -1, delete all values for the account id, else, insert values for the specific realmID
-        PreparedStatement* stmt;
+        // If gmRealmID is -1, delete all values for the account id, else, insert values for the specific realm.Id.Realm
+        LoginDatabasePreparedStatement* stmt;
 
         if (gmRealmID == -1)
         {
             stmt = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_ACCESS);
-
-            stmt->setUInt32(0, targetAccountId);
+            stmt->SetData(0, targetAccountId);
         }
         else
         {
             stmt = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_ACCESS_BY_REALM);
-
-            stmt->setUInt32(0, targetAccountId);
-            stmt->setUInt32(1, realmID);
+            stmt->SetData(0, targetAccountId);
+            stmt->SetData(1, realm.Id.Realm);
         }
 
         LoginDatabase.Execute(stmt);
@@ -570,15 +830,14 @@ public:
         {
             stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_ACCOUNT_ACCESS);
 
-            stmt->setUInt32(0, targetAccountId);
-            stmt->setUInt8(1, uint8(gm));
-            stmt->setInt32(2, gmRealmID);
+            stmt->SetData(0, targetAccountId);
+            stmt->SetData(1, uint8(gm));
+            stmt->SetData(2, gmRealmID);
 
             LoginDatabase.Execute(stmt);
         }
 
-
-        handler->PSendSysMessage(LANG_YOU_CHANGE_SECURITY, targetAccountName.c_str(), gm);
+        handler->PSendSysMessage(LANG_YOU_CHANGE_SECURITY, targetAccountName, gm);
         return true;
     }
 
@@ -599,16 +858,14 @@ public:
         std::string accountName = account;
         if (!Utf8ToUpperOnlyLatin(accountName))
         {
-            handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
             return false;
         }
 
         uint32 targetAccountId = AccountMgr::GetId(accountName);
         if (!targetAccountId)
         {
-            handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
             return false;
         }
 
@@ -619,8 +876,7 @@ public:
 
         if (strcmp(password, passwordConfirmation))
         {
-            handler->SendSysMessage(LANG_NEW_PASSWORDS_NOT_MATCH);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_NEW_PASSWORDS_NOT_MATCH);
             return false;
         }
 
@@ -632,16 +888,60 @@ public:
                 handler->SendSysMessage(LANG_COMMAND_PASSWORD);
                 break;
             case AOR_NAME_NOT_EXIST:
-                handler->PSendSysMessage(LANG_ACCOUNT_NOT_EXIST, accountName.c_str());
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
                 return false;
             case AOR_PASS_TOO_LONG:
-                handler->SendSysMessage(LANG_PASSWORD_TOO_LONG);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_PASSWORD_TOO_LONG);
                 return false;
             default:
-                handler->SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
-                handler->SetSentErrorMessage(true);
+                handler->SendErrorMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
+                return false;
+        }
+        return true;
+    }
+
+    /// Set email for account
+    static bool HandleAccountSetEmailCommand(ChatHandler* handler, AccountIdentifier account, std::string email, std::string emailConfirmation)
+
+    {
+        if (!account || !email.data() || !emailConfirmation.data())
+            return false;
+
+        std::string accountName = account.GetName();
+        if (!Utf8ToUpperOnlyLatin(accountName))
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        uint32 targetAccountId = account.GetID();
+        if (!targetAccountId)
+        {
+            handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+            return false;
+        }
+
+        if (email != emailConfirmation)
+        {
+            handler->SendErrorMessage(LANG_NEW_EMAILS_NOT_MATCH);
+            return false;
+        }
+
+        AccountOpResult result = AccountMgr::ChangeEmail(targetAccountId, email.data());
+
+        switch (result)
+        {
+            case AOR_OK:
+                handler->SendSysMessage(LANG_COMMAND_EMAIL);
+                break;
+            case AOR_NAME_NOT_EXIST:
+                handler->SendErrorMessage(LANG_ACCOUNT_NOT_EXIST, accountName);
+                return false;
+            case AOR_EMAIL_TOO_LONG:
+                handler->SendErrorMessage(LANG_EMAIL_TOO_LONG);
+                return false;
+            default:
+                handler->SendErrorMessage(LANG_COMMAND_NOTCHANGEEMAIL);
                 return false;
         }
         return true;

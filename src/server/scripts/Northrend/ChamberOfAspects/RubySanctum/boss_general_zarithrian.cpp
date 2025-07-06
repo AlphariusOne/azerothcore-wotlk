@@ -1,8 +1,21 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 #include "ruby_sanctum.h"
@@ -88,46 +101,49 @@ public:
         {
         }
 
-        void Reset()
+        void Reset() override
         {
             BossAI::Reset();
             if (instance->GetBossState(DATA_SAVIANA_RAGEFIRE) == DONE && instance->GetBossState(DATA_BALTHARUS_THE_WARBORN) == DONE)
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_NOT_SELECTABLE);
+            {
+                me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                me->SetImmuneToPC(false);
+            }
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
-            BossAI::EnterCombat(who);
+            BossAI::JustEngagedWith(who);
             Talk(SAY_AGGRO);
 
-            events.ScheduleEvent(EVENT_CLEAVE, 9000);
-            events.ScheduleEvent(EVENT_INTIDMDATING_ROAR, 14000);
-            events.ScheduleEvent(EVENT_SUMMON_ADDS1, 18000);
+            events.ScheduleEvent(EVENT_CLEAVE, 9s);
+            events.ScheduleEvent(EVENT_INTIDMDATING_ROAR, 14s);
+            events.ScheduleEvent(EVENT_SUMMON_ADDS1, 18s);
             if (Is25ManRaid())
-                events.ScheduleEvent(EVENT_SUMMON_ADDS2, 20000);
+                events.ScheduleEvent(EVENT_SUMMON_ADDS2, 20s);
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             BossAI::JustDied(killer);
             Talk(SAY_DEATH);
         }
 
-        void KilledUnit(Unit*  /*victim*/)
+        void KilledUnit(Unit*  /*victim*/) override
         {
             if (events.GetNextEventTime(EVENT_KILL_TALK) == 0)
             {
                 Talk(SAY_KILL);
-                events.ScheduleEvent(EVENT_KILL_TALK, 6000);
+                events.ScheduleEvent(EVENT_KILL_TALK, 6s);
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -140,42 +156,41 @@ public:
             {
                 case EVENT_SUMMON_ADDS1:
                     Talk(SAY_ADDS);
-                    if (Creature* stalker1 = ObjectAccessor::GetCreature(*me, instance->GetData64(DATA_ZARITHRIAN_SPAWN_STALKER_1)))
+                    if (Creature* stalker1 = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_ZARITHRIAN_SPAWN_STALKER_1)))
                         stalker1->CastSpell(stalker1, SPELL_SUMMON_FLAMECALLER, false);
-                    if (Creature* stalker2 = ObjectAccessor::GetCreature(*me, instance->GetData64(DATA_ZARITHRIAN_SPAWN_STALKER_2)))
+                    if (Creature* stalker2 = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_ZARITHRIAN_SPAWN_STALKER_2)))
                         stalker2->CastSpell(stalker2, SPELL_SUMMON_FLAMECALLER, false);
-                    events.ScheduleEvent(EVENT_SUMMON_ADDS1, 40000);
+                    events.ScheduleEvent(EVENT_SUMMON_ADDS1, 40s);
                     break;
                 case EVENT_SUMMON_ADDS2:
-                    if (Creature* stalker1 = ObjectAccessor::GetCreature(*me, instance->GetData64(DATA_ZARITHRIAN_SPAWN_STALKER_1)))
+                    if (Creature* stalker1 = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_ZARITHRIAN_SPAWN_STALKER_1)))
                         stalker1->CastSpell(stalker1, SPELL_SUMMON_FLAMECALLER, false);
-                    if (Creature* stalker2 = ObjectAccessor::GetCreature(*me, instance->GetData64(DATA_ZARITHRIAN_SPAWN_STALKER_2)))
+                    if (Creature* stalker2 = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_ZARITHRIAN_SPAWN_STALKER_2)))
                         stalker2->CastSpell(stalker2, SPELL_SUMMON_FLAMECALLER, false);
-                    events.ScheduleEvent(EVENT_SUMMON_ADDS2, 40000);
+                    events.ScheduleEvent(EVENT_SUMMON_ADDS2, 40s);
                     break;
                 case EVENT_INTIDMDATING_ROAR:
                     me->CastSpell(me, SPELL_INTIMIDATING_ROAR, false);
-                    events.ScheduleEvent(EVENT_INTIDMDATING_ROAR, 30000);
+                    events.ScheduleEvent(EVENT_INTIDMDATING_ROAR, 30s);
                     break;
                 case EVENT_CLEAVE:
                     me->CastSpell(me->GetVictim(), SPELL_CLEAVE_ARMOR, false);
-                    events.ScheduleEvent(EVENT_CLEAVE, 15000);
+                    events.ScheduleEvent(EVENT_CLEAVE, 15s);
                     break;
             }
 
             DoMeleeAttackIfReady();
-            EnterEvadeIfOutOfCombatArea();
         }
 
-        bool CheckEvadeIfOutOfCombatArea() const
+        bool CheckEvadeIfOutOfCombatArea() const override
         {
             return me->GetPositionX() > 3060.0f;
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_general_zarithrianAI>(creature);
+        return GetRubySanctumAI<boss_general_zarithrianAI>(creature);
     }
 };
 
@@ -191,33 +206,33 @@ public:
             npc_escortAI::SetDespawnAtEnd(false);
         }
 
-        void Reset()
+        void Reset() override
         {
             _lavaGoutCount = 0;
             AddWaypoints();
             Start(true, true);
         }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
             _events.Reset();
-            _events.ScheduleEvent(EVENT_BLAST_NOVA, urand(20000, 30000));
-            _events.ScheduleEvent(EVENT_LAVA_GOUT, 5000);
+            _events.ScheduleEvent(EVENT_BLAST_NOVA, 20s, 30s);
+            _events.ScheduleEvent(EVENT_LAVA_GOUT, 5s);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
             // Prevent EvadeMode
         }
 
-        void IsSummonedBy(Unit* /*summoner*/)
+        void IsSummonedBy(WorldObject* /*summoner*/) override
         {
             // Let Zarithrian count as summoner. _instance cant be null since we got GetRubySanctumAI
-            if (Creature* zarithrian = ObjectAccessor::GetCreature(*me, _instance->GetData64(NPC_GENERAL_ZARITHRIAN)))
+            if (Creature* zarithrian = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(NPC_GENERAL_ZARITHRIAN)))
                 zarithrian->AI()->JustSummoned(me);
         }
 
-        void WaypointReached(uint32 waypointId)
+        void WaypointReached(uint32 waypointId) override
         {
             if (waypointId == MAX_PATH_FLAMECALLER_WAYPOINTS)
                 me->SetInCombatWithZone();
@@ -237,7 +252,7 @@ public:
             }
         }
 
-        void UpdateEscortAI(uint32 diff)
+        void UpdateEscortAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -250,18 +265,18 @@ public:
             {
                 case EVENT_BLAST_NOVA:
                     DoCastAOE(SPELL_BLAST_NOVA);
-                    _events.ScheduleEvent(EVENT_BLAST_NOVA, urand(20000, 30000));
+                    _events.ScheduleEvent(EVENT_BLAST_NOVA, 20s, 30s);
                     break;
                 case EVENT_LAVA_GOUT:
                     if (_lavaGoutCount >= 3)
                     {
                         _lavaGoutCount = 0;
-                        _events.ScheduleEvent(EVENT_LAVA_GOUT, 8000);
+                        _events.ScheduleEvent(EVENT_LAVA_GOUT, 8s);
                         break;
                     }
                     DoCastVictim(SPELL_LAVA_GOUT);
                     _lavaGoutCount++;
-                    _events.ScheduleEvent(EVENT_LAVA_GOUT, 1500);
+                    _events.ScheduleEvent(EVENT_LAVA_GOUT, 1500ms);
                     break;
             }
 
@@ -273,9 +288,9 @@ public:
         uint8 _lavaGoutCount;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<npc_onyx_flamecallerAI>(creature);
+        return GetRubySanctumAI<npc_onyx_flamecallerAI>(creature);
     }
 };
 

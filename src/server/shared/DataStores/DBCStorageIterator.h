@@ -1,20 +1,36 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2020 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef DBCStorageIterator_h__
 #define DBCStorageIterator_h__
 
 #include "Define.h"
-#include <iterator>
 
 template <class T>
-class DBCStorageIterator : public std::iterator<std::forward_iterator_tag, T>
+class DBCStorageIterator
 {
 public:
-    DBCStorageIterator() : _index(nullptr), _pos(0), _end(0) { }
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = T*;
+    using reference = T&;
+
+    DBCStorageIterator() : _index(nullptr) { }
     DBCStorageIterator(T** index, uint32 size, uint32 pos = 0) : _index(index), _pos(pos), _end(size)
     {
         if (_pos < _end)
@@ -51,8 +67,8 @@ public:
 
 private:
     T** _index;
-    uint32 _pos;
-    uint32 _end;
+    uint32 _pos{0};
+    uint32 _end{0};
 };
 
 #endif // DBCStorageIterator_h__

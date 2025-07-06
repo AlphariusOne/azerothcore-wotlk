@@ -1,12 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "vmapexport.h"
 #include "wdtfile.h"
 #include "adtfile.h"
+#include "vmapexport.h"
+
 #include <cstdio>
 
 char* wdtGetPlainName(char* FileName)
@@ -18,14 +30,14 @@ char* wdtGetPlainName(char* FileName)
     return FileName;
 }
 
-WDTFile::WDTFile(char* file_name, char* file_name1) : WDT(file_name), gWmoInstansName(nullptr), gnWMO(0)
+WDTFile::WDTFile(char* file_name, char* file_name1) : _file(file_name)
 {
     filename.append(file_name1, strlen(file_name1));
 }
 
-bool WDTFile::init(char* /*map_id*/, unsigned int mapID)
+bool WDTFile::init(uint32 mapId)
 {
-    if (WDT.isEof())
+    if (_file.isEof())
     {
         //printf("Can't find WDT file.\n");
         return false;
@@ -43,15 +55,15 @@ bool WDTFile::init(char* /*map_id*/, unsigned int mapID)
         return false;
     }
 
-    while (!WDT.isEof())
+    while (!_file.isEof())
     {
-        WDT.read(fourcc, 4);
-        WDT.read(&size, 4);
+        _file.read(fourcc, 4);
+        _file.read(&size, 4);
 
         flipcc(fourcc);
         fourcc[4] = 0;
 
-        size_t nextpos = WDT.getPos() + size;
+        std::size_t nextpos = _file.getPos() + size;
 
         if (!strcmp(fourcc, "MAIN"))
         {
@@ -62,16 +74,19 @@ bool WDTFile::init(char* /*map_id*/, unsigned int mapID)
             if (size)
             {
                 char* buf = new char[size];
-                WDT.read(buf, size);
+                _file.read(buf, size);
                 char* p = buf;
-                int q = 0;
-                gWmoInstansName = new string[size];
                 while (p < buf + size)
                 {
+                    std::string path(p);
+
                     char* s = wdtGetPlainName(p);
                     fixnamen(s, strlen(s));
+                    fixname2(s, strlen(s));
                     p = p + strlen(p) + 1;
-                    gWmoInstansName[q++] = s;
+                    _wmoNames.push_back(s);
+
+                    ExtractSingleWmo(path);
                 }
                 delete[] buf;
             }
@@ -81,29 +96,27 @@ bool WDTFile::init(char* /*map_id*/, unsigned int mapID)
             // global wmo instance data
             if (size)
             {
-                gnWMO = (int)size / 64;
-
-                for (int i = 0; i < gnWMO; ++i)
+                uint32 mapObjectCount = size / sizeof(ADT::MODF);
+                for (uint32 i = 0; i < mapObjectCount; ++i)
                 {
-                    int id;
-                    WDT.read(&id, 4);
-                    WMOInstance inst(WDT, gWmoInstansName[id].c_str(), mapID, 65, 65, dirfile);
+                    ADT::MODF mapObjDef;
+                    _file.read(&mapObjDef, sizeof(ADT::MODF));
+                    MapObject::Extract(mapObjDef, _wmoNames[mapObjDef.Id].c_str(), mapId, 65, 65, dirfile);
+                    Doodad::ExtractSet(WmoDoodads[_wmoNames[mapObjDef.Id]], mapObjDef, mapId, 65, 65, dirfile);
                 }
-
-                delete[] gWmoInstansName;
             }
         }
-        WDT.seek((int)nextpos);
+        _file.seek((int)nextpos);
     }
 
-    WDT.close();
+    _file.close();
     fclose(dirfile);
     return true;
 }
 
-WDTFile::~WDTFile(void)
+WDTFile::~WDTFile()
 {
-    WDT.close();
+    _file.close();
 }
 
 ADTFile* WDTFile::GetMap(int x, int z)
@@ -113,6 +126,6 @@ ADTFile* WDTFile::GetMap(int x, int z)
 
     char name[512];
 
-    sprintf(name, "World\\Maps\\%s\\%s_%d_%d.adt", filename.c_str(), filename.c_str(), x, z);
+    snprintf(name, sizeof(name), R"(World\Maps\%s\%s_%d_%d.adt)", filename.c_str(), filename.c_str(), x, z);
     return new ADTFile(name);
 }

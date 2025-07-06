@@ -1,9 +1,27 @@
-#include "gtest/gtest.h"
-#include "Formulas.h"
-#include "SharedDefines.h"
+/*
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-using namespace acore::Honor;
-using namespace acore::XP;
+#include "DBCStores.h"
+#include "Formulas.h"
+#include "WorldMock.h"
+#include "gtest/gtest.h"
+
+using namespace Acore::Honor;
+using namespace Acore::XP;
 
 TEST(FormulasTest, hk_honor_at_level)
 {
@@ -68,4 +86,24 @@ TEST(FormulasTest, GetZeroDifference)
     EXPECT_EQ(GetZeroDifference(59), 16);
     EXPECT_EQ(GetZeroDifference(60), 17);
     EXPECT_EQ(GetZeroDifference(80), 17);
+}
+
+TEST(FormulasTest, BaseGain)
+{
+    EXPECT_EQ(BaseGain(60, 40, CONTENT_1_60), 0);
+    EXPECT_EQ(BaseGain(60, 60, CONTENT_1_60), 345);
+    EXPECT_EQ(BaseGain(50, 60, CONTENT_1_60), 354);
+    EXPECT_EQ(BaseGain(65, 66, CONTENT_61_70), 588);
+    EXPECT_EQ(BaseGain(79, 78, CONTENT_71_80), 917);
+
+    // check outError() has been called after passing an invalid ContentLevels content
+    EXPECT_EQ(BaseGain(79, 1, ContentLevels(999)), 0);
+}
+
+TEST(FormulasTest, Gain)
+{
+    auto worldMock = new WorldMock();
+    sWorld.reset((worldMock));
+    /// @todo: create mocks of Player and Creature
+    // Gain(nullptr, nullptr);
 }

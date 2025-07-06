@@ -1,19 +1,28 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
-#include "Common.h"
-#include "ObjectAccessor.h"
-#include "ObjectMgr.h"
-#include "WorldPacket.h"
-#include "WorldSession.h"
 
 #include "Battlefield.h"
 #include "BattlefieldMgr.h"
+#include "GameTime.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 //This send to player windows for invite player to join the war
 //Param1:(BattleId) the BattleId of Bf
@@ -25,7 +34,7 @@ void WorldSession::SendBfInvitePlayerToWar(uint32 BattleId, uint32 ZoneId, uint3
     WorldPacket data(SMSG_BATTLEFIELD_MGR_ENTRY_INVITE, 12);
     data << uint32(BattleId);
     data << uint32(ZoneId);
-    data << uint32((time(nullptr) + p_time));
+    data << uint32((GameTime::GetGameTime().count() + p_time));
 
     //Sending the packet to player
     SendPacket(&data);
@@ -90,7 +99,7 @@ void WorldSession::HandleBfQueueInviteResponse(WorldPacket& recvData)
     uint8 Accepted;
 
     recvData >> BattleId >> Accepted;
-    //sLog->outError("HandleQueueInviteResponse: BattleID:%u Accepted:%u", BattleId, Accepted);
+
     Battlefield* Bf = sBattlefieldMgr->GetBattlefieldByBattleId(BattleId);
     if (!Bf)
         return;
@@ -108,7 +117,7 @@ void WorldSession::HandleBfEntryInviteResponse(WorldPacket& recvData)
     uint8 Accepted;
 
     recvData >> BattleId >> Accepted;
-    //sLog->outError("HandleBattlefieldInviteResponse: BattleID:%u Accepted:%u", BattleId, Accepted);
+
     Battlefield* Bf = sBattlefieldMgr->GetBattlefieldByBattleId(BattleId);
     if (!Bf)
         return;
@@ -130,7 +139,7 @@ void WorldSession::HandleBfExitRequest(WorldPacket& recvData)
     uint32 BattleId;
 
     recvData >> BattleId;
-    //sLog->outError("HandleBfExitRequest: BattleID:%u ", BattleId);
+
     Battlefield* Bf = sBattlefieldMgr->GetBattlefieldByBattleId(BattleId);
     if (!Bf)
         return;

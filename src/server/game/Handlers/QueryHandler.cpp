@@ -1,30 +1,39 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "Common.h"
-#include "Language.h"
-#include "DatabaseEnv.h"
+#include "GameTime.h"
+#include "Log.h"
+#include "MapMgr.h"
+#include "NPCHandler.h"
+#include "ObjectMgr.h"
+#include "Opcodes.h"
+#include "Pet.h"
+#include "Player.h"
+#include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "Opcodes.h"
-#include "Log.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Player.h"
-#include "UpdateMask.h"
-#include "NPCHandler.h"
-#include "Pet.h"
-#include "MapManager.h"
 
-void WorldSession::SendNameQueryOpcode(uint64 guid)
+void WorldSession::SendNameQueryOpcode(ObjectGuid guid)
 {
-    GlobalPlayerData const* playerData = sWorld->GetGlobalPlayerData(GUID_LOPART(guid));
+    CharacterCacheEntry const* playerData = sCharacterCache->GetCharacterCacheByGuid(guid);
 
     WorldPacket data(SMSG_NAME_QUERY_RESPONSE, (8 + 1 + 1 + 1 + 1 + 1 + 10));
-    data.appendPackGUID(guid);
+    data << guid.WriteAsPacked();
     if (!playerData)
     {
         data << uint8(1);                           // name unknown
@@ -32,17 +41,17 @@ void WorldSession::SendNameQueryOpcode(uint64 guid)
         return;
     }
 
-    Player* player = ObjectAccessor::FindPlayerInOrOutOfWorld(guid);
+    Player* player = ObjectAccessor::FindConnectedPlayer(guid);
 
     data << uint8(0);                               // name known
-    data << playerData->name;                       // played name
+    data << playerData->Name;                       // played name
     data << uint8(0);                               // realm name - only set for cross realm interaction (such as Battlegrounds)
-    data << uint8(player ? player->getRace() : playerData->race);
-    data << uint8(playerData->gender);
-    data << uint8(playerData->playerClass);
+    data << uint8(player ? player->getRace() : playerData->Race);
+    data << uint8(playerData->Sex);
+    data << uint8(playerData->Class);
 
     // pussywizard: optimization
-    /*Player* player = ObjectAccessor::FindPlayerInOrOutOfWorld(guid);
+    /*Player* player = ObjectAccessor::FindConnectedPlayer(guid);
     if (DeclinedName const* names = (player ? player->GetDeclinedNames() : nullptr))
     {
         data << uint8(1);                           // Name is declined
@@ -57,11 +66,11 @@ void WorldSession::SendNameQueryOpcode(uint64 guid)
 
 void WorldSession::HandleNameQueryOpcode(WorldPacket& recvData)
 {
-    uint64 guid;
+    ObjectGuid guid;
     recvData >> guid;
 
     // This is disable by default to prevent lots of console spam
-    // sLog->outString("HandleNameQueryOpcode %u", guid);
+    // LOG_INFO("network.opcode", "HandleNameQueryOpcode {}", guid);
 
     SendNameQueryOpcode(guid);
 }
@@ -73,9 +82,11 @@ void WorldSession::HandleQueryTimeOpcode(WorldPacket& /*recvData*/)
 
 void WorldSession::SendQueryTimeResponse()
 {
+    auto timeResponse = sWorld->GetNextDailyQuestsResetTime() - GameTime::GetGameTime();
+
     WorldPacket data(SMSG_QUERY_TIME_RESPONSE, 4 + 4);
-    data << uint32(time(nullptr));
-    data << uint32(sWorld->GetNextDailyQuestsResetTime() - time(nullptr));
+    data << uint32(GameTime::GetGameTime().count());
+    data << uint32(timeResponse.count());
     SendPacket(&data);
 }
 
@@ -84,7 +95,7 @@ void WorldSession::HandleCreatureQueryOpcode(WorldPacket& recvData)
 {
     uint32 entry;
     recvData >> entry;
-    uint64 guid;
+    ObjectGuid guid;
     recvData >> guid;
 
     CreatureTemplate const* ci = sObjectMgr->GetCreatureTemplate(entry);
@@ -105,47 +116,55 @@ void WorldSession::HandleCreatureQueryOpcode(WorldPacket& recvData)
         }
         // guess size
         WorldPacket data(SMSG_CREATURE_QUERY_RESPONSE, 100);
-        data << uint32(entry);                              // creature entry
+        data << uint32(entry);                                       // creature entry
         data << Name;
-        data << uint8(0) << uint8(0) << uint8(0);           // name2, name3, name4, always empty
+        data << uint8(0) << uint8(0) << uint8(0);                    // name2, name3, name4, always empty
         data << Title;
-        data << ci->IconName;                               // "Directions" for guard, string for Icons 2.3.0
-        data << uint32(ci->type_flags);                     // flags
-        data << uint32(ci->type);                           // CreatureType.dbc
-        data << uint32(ci->family);                         // CreatureFamily.dbc
-        data << uint32(ci->rank);                           // Creature Rank (elite, boss, etc)
-        data << uint32(ci->KillCredit[0]);                  // new in 3.1, kill credit
-        data << uint32(ci->KillCredit[1]);                  // new in 3.1, kill credit
-        data << uint32(ci->Modelid1);                       // Modelid1
-        data << uint32(ci->Modelid2);                       // Modelid2
-        data << uint32(ci->Modelid3);                       // Modelid3
-        data << uint32(ci->Modelid4);                       // Modelid4
-        data << float(ci->ModHealth);                       // dmg/hp modifier
-        data << float(ci->ModMana);                         // dmg/mana modifier
+        data << ci->IconName;                                        // "Directions" for guard, string for Icons 2.3.0
+        data << uint32(ci->type_flags);                              // flags
+        data << uint32(ci->type);                                    // CreatureType.dbc
+        data << uint32(ci->family);                                  // CreatureFamily.dbc
+        data << uint32(ci->rank);                                    // Creature Rank (elite, boss, etc)
+        data << uint32(ci->KillCredit[0]);                           // new in 3.1, kill credit
+        data << uint32(ci->KillCredit[1]);                           // new in 3.1, kill credit
+        if (ci->GetModelByIdx(0))
+            data << uint32(ci->GetModelByIdx(0)->CreatureDisplayID); // Modelid1
+        else
+            data << uint32(0);                                       // Modelid1
+        if (ci->GetModelByIdx(1))
+            data << uint32(ci->GetModelByIdx(1)->CreatureDisplayID); // Modelid2
+        else
+            data << uint32(0);                                       // Modelid2
+        if (ci->GetModelByIdx(2))
+            data << uint32(ci->GetModelByIdx(2)->CreatureDisplayID); // Modelid3
+        else
+            data << uint32(0);                                       // Modelid3
+        if (ci->GetModelByIdx(3))
+            data << uint32(ci->GetModelByIdx(3)->CreatureDisplayID); // Modelid4
+        else
+            data << uint32(0);                                       // Modelid4
+        data << float(ci->ModHealth);                                // dmg/hp modifier
+        data << float(ci->ModMana);                                  // dmg/mana modifier
         data << uint8(ci->RacialLeader);
 
         CreatureQuestItemList const* items = sObjectMgr->GetCreatureQuestItemList(entry);
         if (items)
-            for (size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
+            for (std::size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
                 data << (i < items->size() ? uint32((*items)[i]) : uint32(0));
         else
-            for (size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
+            for (std::size_t i = 0; i < MAX_CREATURE_QUEST_ITEMS; ++i)
                 data << uint32(0);
 
-        data << uint32(ci->movementId);                     // CreatureMovementInfo.dbc
+        data << uint32(ci->movementId);                              // CreatureMovementInfo.dbc
         SendPacket(&data);
     }
     else
     {
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_CREATURE_QUERY - NO CREATURE INFO! (GUID: %u, ENTRY: %u)", GUID_LOPART(guid), entry);
-#endif
+        LOG_DEBUG("network", "WORLD: CMSG_CREATURE_QUERY - NO CREATURE INFO! ({})", guid.ToString());
         WorldPacket data(SMSG_CREATURE_QUERY_RESPONSE, 4);
         data << uint32(entry | 0x80000000);
         SendPacket(&data);
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Sent SMSG_CREATURE_QUERY_RESPONSE");
-#endif
+        LOG_DEBUG("network", "WORLD: Sent SMSG_CREATURE_QUERY_RESPONSE");
     }
 }
 
@@ -154,7 +173,7 @@ void WorldSession::HandleGameObjectQueryOpcode(WorldPacket& recvData)
 {
     uint32 entry;
     recvData >> entry;
-    uint64 guid;
+    ObjectGuid guid;
     recvData >> guid;
 
     const GameObjectTemplate* info = sObjectMgr->GetGameObjectTemplate(entry);
@@ -176,9 +195,7 @@ void WorldSession::HandleGameObjectQueryOpcode(WorldPacket& recvData)
                 ObjectMgr::GetLocaleString(gameObjectLocale->CastBarCaption, localeConstant, CastBarCaption);
             }
 
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_GAMEOBJECT_QUERY '%s' - Entry: %u. ", info->name.c_str(), entry);
-#endif
+        LOG_DEBUG("network", "WORLD: CMSG_GAMEOBJECT_QUERY '{}' - Entry: {}. ", info->name, entry);
         WorldPacket data (SMSG_GAMEOBJECT_QUERY_RESPONSE, 150);
         data << uint32(entry);
         data << uint32(info->type);
@@ -193,41 +210,28 @@ void WorldSession::HandleGameObjectQueryOpcode(WorldPacket& recvData)
 
         GameObjectQuestItemList const* items = sObjectMgr->GetGameObjectQuestItemList(entry);
         if (items)
-            for (size_t i = 0; i < MAX_GAMEOBJECT_QUEST_ITEMS; ++i)
+            for (std::size_t i = 0; i < MAX_GAMEOBJECT_QUEST_ITEMS; ++i)
                 data << (i < items->size() ? uint32((*items)[i]) : uint32(0));
         else
-            for (size_t i = 0; i < MAX_GAMEOBJECT_QUEST_ITEMS; ++i)
+            for (std::size_t i = 0; i < MAX_GAMEOBJECT_QUEST_ITEMS; ++i)
                 data << uint32(0);
 
         SendPacket(&data);
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Sent SMSG_GAMEOBJECT_QUERY_RESPONSE");
-#endif
+        LOG_DEBUG("network", "WORLD: Sent SMSG_GAMEOBJECT_QUERY_RESPONSE");
     }
     else
     {
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_GAMEOBJECT_QUERY - Missing gameobject info for (GUID: %u, ENTRY: %u)",
-                       GUID_LOPART(guid), entry);
-#endif
+        LOG_DEBUG("network", "WORLD: CMSG_GAMEOBJECT_QUERY - Missing gameobject info for ({})", guid.ToString());
         WorldPacket data (SMSG_GAMEOBJECT_QUERY_RESPONSE, 4);
         data << uint32(entry | 0x80000000);
         SendPacket(&data);
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Sent SMSG_GAMEOBJECT_QUERY_RESPONSE");
-#endif
+        LOG_DEBUG("network", "WORLD: Sent SMSG_GAMEOBJECT_QUERY_RESPONSE");
     }
 }
 
 void WorldSession::HandleCorpseQueryOpcode(WorldPacket& /*recvData*/)
 {
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Received MSG_CORPSE_QUERY");
-#endif
-
-    Corpse* corpse = GetPlayer()->GetCorpse();
-
-    if (!corpse)
+    if (!_player->HasCorpse())
     {
         WorldPacket data(MSG_CORPSE_QUERY, 1);
         data << uint8(0);                                   // corpse not found
@@ -235,24 +239,25 @@ void WorldSession::HandleCorpseQueryOpcode(WorldPacket& /*recvData*/)
         return;
     }
 
-    uint32 mapid = corpse->GetMapId();
-    float x = corpse->GetPositionX();
-    float y = corpse->GetPositionY();
-    float z = corpse->GetPositionZ();
-    uint32 corpsemapid = mapid;
+    WorldLocation corpseLocation = _player->GetCorpseLocation();
+    uint32 corpseMapID = corpseLocation.GetMapId();
+    uint32 mapID = corpseLocation.GetMapId();
+    float x = corpseLocation.GetPositionX();
+    float y = corpseLocation.GetPositionY();
+    float z = corpseLocation.GetPositionZ();
 
     // if corpse at different map
-    if (mapid != _player->GetMapId())
+    if (mapID != _player->GetMapId())
     {
         // search entrance map for proper show entrance
-        if (MapEntry const* corpseMapEntry = sMapStore.LookupEntry(mapid))
+        if (MapEntry const* corpseMapEntry = sMapStore.LookupEntry(mapID))
         {
             if (corpseMapEntry->IsDungeon() && corpseMapEntry->entrance_map >= 0)
             {
                 // if corpse map have entrance
                 if (Map const* entranceMap = sMapMgr->CreateBaseMap(corpseMapEntry->entrance_map))
                 {
-                    mapid = corpseMapEntry->entrance_map;
+                    mapID = corpseMapEntry->entrance_map;
                     x = corpseMapEntry->entrance_x;
                     y = corpseMapEntry->entrance_y;
                     z = entranceMap->GetHeight(GetPlayer()->GetPhaseMask(), x, y, MAX_HEIGHT);
@@ -263,11 +268,11 @@ void WorldSession::HandleCorpseQueryOpcode(WorldPacket& /*recvData*/)
 
     WorldPacket data(MSG_CORPSE_QUERY, 1 + (6 * 4));
     data << uint8(1);                                       // corpse found
-    data << int32(mapid);
+    data << int32(mapID);
     data << float(x);
     data << float(y);
     data << float(z);
-    data << int32(corpsemapid);
+    data << int32(corpseMapID);
     data << uint32(0);                                      // unknown
     SendPacket(&data);
 }
@@ -275,12 +280,10 @@ void WorldSession::HandleCorpseQueryOpcode(WorldPacket& /*recvData*/)
 void WorldSession::HandleNpcTextQueryOpcode(WorldPacket& recvData)
 {
     uint32 textID;
-    uint64 guid;
+    ObjectGuid guid;
 
     recvData >> textID;
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: CMSG_NPC_TEXT_QUERY TextId: %u", textID);
-#endif
+    LOG_DEBUG("network", "WORLD: CMSG_NPC_TEXT_QUERY TextId: {}", textID);
 
     recvData >> guid;
 
@@ -357,18 +360,12 @@ void WorldSession::HandleNpcTextQueryOpcode(WorldPacket& recvData)
 
     SendPacket(&data);
 
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Sent SMSG_NPC_TEXT_UPDATE");
-#endif
+    LOG_DEBUG("network", "WORLD: Sent SMSG_NPC_TEXT_UPDATE");
 }
 
 /// Only _static_ data is sent in this packet !!!
 void WorldSession::HandlePageTextQueryOpcode(WorldPacket& recvData)
 {
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Received CMSG_PAGE_TEXT_QUERY");
-#endif
-
     uint32 pageID;
     recvData >> pageID;
     recvData.read_skip<uint64>();                          // guid
@@ -396,22 +393,18 @@ void WorldSession::HandlePageTextQueryOpcode(WorldPacket& recvData)
                     ObjectMgr::GetLocaleString(player->Text, loc_idx, Text);
 
             data << Text;
-            data << uint32(pageText->NextPage);
+            data << pageText->NextPage;
             pageID = pageText->NextPage;
         }
         SendPacket(&data);
 
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-        sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Sent SMSG_PAGE_TEXT_QUERY_RESPONSE");
-#endif
+        LOG_DEBUG("network", "WORLD: Sent SMSG_PAGE_TEXT_QUERY_RESPONSE");
     }
 }
 
 void WorldSession::HandleCorpseMapPositionQuery(WorldPacket& recvData)
 {
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_NETWORKIO, "WORLD: Recv CMSG_CORPSE_MAP_POSITION_QUERY");
-#endif
+    LOG_DEBUG("network", "WORLD: Recv CMSG_CORPSE_MAP_POSITION_QUERY");
 
     uint32 unk;
     recvData >> unk;

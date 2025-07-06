@@ -1,13 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "MoveSpline.h"
-#include <sstream>
-#include "Log.h"
 #include "Creature.h"
+#include "Log.h"
+#include <sstream>
 
 namespace Movement
 {
@@ -36,7 +47,7 @@ namespace Movement
             if (splineflags.final_angle)
                 c.orientation = facing.angle;
             else if (splineflags.final_point)
-                c.orientation = atan2(facing.f.y - c.y, facing.f.x - c.x);
+                c.orientation = std::atan2(facing.f.y - c.y, facing.f.x - c.x);
             //nothing to do for MoveSplineFlag::Final_Target flag
         }
         else
@@ -45,7 +56,7 @@ namespace Movement
             {
                 Vector3 hermite;
                 spline.evaluate_derivative(point_Idx, u, hermite);
-                c.orientation = atan2(hermite.y, hermite.x);
+                c.orientation = std::atan2(hermite.y, hermite.x);
             }
 
             if (splineflags.orientationInversed)
@@ -69,7 +80,7 @@ namespace Movement
 
     void MoveSpline::computeFallElevation(float& el) const
     {
-        float z_now = spline.getPoint(spline.first(), false).z - Movement::computeFallElevation(MSToSec(time_passed), false);
+        float z_now = spline.getPoint(spline.first()).z - Movement::computeFallElevation(MSToSec(time_passed), false);
         float final_z = FinalDestination().z;
         el = std::max(z_now, final_z);
     }
@@ -85,7 +96,7 @@ namespace Movement
         float start_elevation;
         inline int32 operator()(Spline<int32>& s, int32 i)
         {
-            return Movement::computeFallTime(start_elevation - s.getPoint(i + 1, false).z, false) * 1000.f;
+            return Movement::computeFallTime(start_elevation - s.getPoint(i + 1).z, false) * 1000.f;
         }
     };
 
@@ -96,14 +107,16 @@ namespace Movement
 
     struct CommonInitializer
     {
-        CommonInitializer(float _velocity) : velocityInv(1000.f / _velocity), time(minimal_duration) {}
-        float velocityInv;
-        int32 time;
+        CommonInitializer(float _velocity) : velocityInv(1000.f / _velocity), _time(minimal_duration) {}
+
         inline int32 operator()(Spline<int32>& s, int32 i)
         {
-            time += (s.SegLength(i) * velocityInv);
-            return time;
+            _time += (s.SegLength(i) * velocityInv);
+            return _time;
         }
+
+        float velocityInv;
+        int32 _time;
     };
 
     void MoveSpline::init_spline(const MoveSplineInitArgs& args)
@@ -125,7 +138,7 @@ namespace Movement
         // init spline timestamps
         if (splineflags.falling)
         {
-            FallInitializer init(spline.getPoint(spline.first(), false).z);
+            FallInitializer init(spline.getPoint(spline.first()).z);
             spline.initLengths(init);
         }
         else
@@ -134,10 +147,9 @@ namespace Movement
             spline.initLengths(init);
         }
 
-        // TODO: what to do in such cases? problem is in input data (all points are at same coords)
+        /// @todo: what to do in such cases? problem is in input data (all points are at same coords)
         if (spline.length() < minimal_duration)
         {
-            //sLog->outError("MoveSpline::init_spline: zero length spline, wrong input data?"); // ZOMG! temp comment to avoid console spam from transports
             spline.set_length(spline.last(), spline.isCyclic() ? 1000 : 1);
         }
         point_Idx = spline.first();
@@ -189,11 +201,14 @@ namespace Movement
     bool MoveSplineInitArgs::Validate(Unit* unit) const
     {
 #define CHECK(exp) \
-    if (!(exp))\
-    {\
-        sLog->outError("MoveSplineInitArgs::Validate: expression '%s' failed for GUID: %u Entry: %u", #exp, unit->GetTypeId() == TYPEID_PLAYER ? unit->GetGUIDLow() : unit->ToCreature()->GetDBTableGUIDLow(), unit->GetEntry());\
-        return false;\
-    }
+        if (!(exp)) \
+        { \
+            if (unit) \
+                LOG_ERROR("misc.movesplineinitargs", "MoveSplineInitArgs::Validate: expression '{}' failed for {}", #exp, unit->GetGUID().ToString()); \
+            else \
+                LOG_ERROR("misc.movesplineinitargs", "MoveSplineInitArgs::Validate: expression '{}' failed for cyclic spline continuation", #exp); \
+            return false;\
+        }
         CHECK(path.size() > 1);
         CHECK(velocity > 0.01f);
         CHECK(time_perc >= 0.f && time_perc <= 1.f);
@@ -208,18 +223,15 @@ namespace Movement
     {
         if (!(flags & MoveSplineFlag::Mask_CatmullRom) && path.size() > 2)
         {
-            enum
-            {
-                MAX_OFFSET = (1 << 11) / 2
-            };
+            constexpr auto MAX_OFFSET = (1 << 11) / 2;
             Vector3 middle = (path.front() + path.back()) / 2;
             Vector3 offset;
             for (uint32 i = 1; i < path.size() - 1; ++i)
             {
                 offset = path[i] - middle;
-                if (fabs(offset.x) >= MAX_OFFSET || fabs(offset.y) >= MAX_OFFSET || fabs(offset.z) >= MAX_OFFSET)
+                if (std::fabs(offset.x) >= MAX_OFFSET || std::fabs(offset.y) >= MAX_OFFSET || std::fabs(offset.z) >= MAX_OFFSET)
                 {
-                    sLog->outError("MoveSplineInitArgs::_checkPathBounds check failed");
+                    LOG_ERROR("movement", "MoveSplineInitArgs::_checkPathBounds check failed");
                     return false;
                 }
             }

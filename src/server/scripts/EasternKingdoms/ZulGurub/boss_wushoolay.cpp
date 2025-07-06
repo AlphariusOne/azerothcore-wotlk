@@ -1,30 +1,36 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Boss_Wushoolay
-SD%Complete: 100
-SDComment:
-SDCategory: Zul'Gurub
-EndScriptData */
-
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "zulgurub.h"
 
 enum Spells
 {
-    SPELL_LIGHTNINGCLOUD        = 25033,
-    SPELL_LIGHTNINGWAVE         = 24819
+    SPELL_LIGHTNING_CLOUD       = 24683,
+    SPELL_CHAIN_LIGHTNING       = 24680,
+    SPELL_FORKED_LIGHTNING      = 24682
 };
 
 enum Events
 {
-    EVENT_LIGHTNINGCLOUD        = 1,
-    EVENT_LIGHTNINGWAVE         = 2
+    EVENT_LIGHTNING_CLOUD       = 1,
+    EVENT_CHAIN_LIGHTNING       = 2,
+    EVENT_FORKED_LIGHTNING      = 3
 };
 
 class boss_wushoolay : public CreatureScript
@@ -36,24 +42,15 @@ public:
     {
         boss_wushoolayAI(Creature* creature) : BossAI(creature, DATA_EDGE_OF_MADNESS) { }
 
-        void Reset()
+        void JustEngagedWith(Unit* /*who*/) override
         {
-            _Reset();
+            _JustEngagedWith();
+            events.ScheduleEvent(EVENT_LIGHTNING_CLOUD, 7s, 15s);
+            events.ScheduleEvent(EVENT_CHAIN_LIGHTNING, 12s, 16s);
+            events.ScheduleEvent(EVENT_FORKED_LIGHTNING, 8s, 12s);
         }
 
-        void JustDied(Unit* /*killer*/)
-        {
-            _JustDied();
-        }
-
-        void EnterCombat(Unit* /*who*/)
-        {
-            _EnterCombat();
-            events.ScheduleEvent(EVENT_LIGHTNINGCLOUD, urand(5000, 10000));
-            events.ScheduleEvent(EVENT_LIGHTNINGWAVE, urand(8000, 16000));
-        }
-
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -67,13 +64,23 @@ public:
             {
                 switch (eventId)
                 {
-                    case EVENT_LIGHTNINGCLOUD:
-                        DoCastVictim(SPELL_LIGHTNINGCLOUD, true);
-                        events.ScheduleEvent(EVENT_LIGHTNINGCLOUD, urand(15000, 20000));
+                    case EVENT_LIGHTNING_CLOUD:
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0))
+                        {
+                            me->CastSpell(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), SPELL_LIGHTNING_CLOUD, false);
+                        }
+                        events.ScheduleEvent(EVENT_LIGHTNING_CLOUD, 9s, 20s);
                         break;
-                    case EVENT_LIGHTNINGWAVE:
-                        DoCast(SelectTarget(SELECT_TARGET_RANDOM, 0, 100, true), SPELL_LIGHTNINGWAVE);
-                        events.ScheduleEvent(EVENT_LIGHTNINGWAVE, urand(12000, 16000));
+                    case EVENT_CHAIN_LIGHTNING:
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0))
+                        {
+                            DoCast(target, SPELL_CHAIN_LIGHTNING);
+                        }
+                        events.ScheduleEvent(EVENT_CHAIN_LIGHTNING, 12s, 24s);
+                        break;
+                    case EVENT_FORKED_LIGHTNING:
+                        DoCastAOE(SPELL_FORKED_LIGHTNING);
+                        events.ScheduleEvent(EVENT_FORKED_LIGHTNING, 8s, 20s);
                         break;
                     default:
                         break;
@@ -84,9 +91,9 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_wushoolayAI(creature);
+        return GetZulGurubAI<boss_wushoolayAI>(creature);
     }
 };
 
@@ -94,4 +101,3 @@ void AddSC_boss_wushoolay()
 {
     new boss_wushoolay();
 }
-

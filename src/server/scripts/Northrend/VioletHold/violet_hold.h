@@ -1,11 +1,30 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_VIOLET_HOLD_H
 #define DEF_VIOLET_HOLD_H
 
 #define MAX_ENCOUNTER 3
+
+#include "CreatureAIImpl.h"
+
+#define DataHeader "VIO"
+
+#define VioletHoldScriptName "instance_violet_hold"
 
 enum Creatures
 {
@@ -70,22 +89,18 @@ enum Bosses
     BOSS_CYANIGOSA
 };
 
-enum VHWorldStates
-{
-    WORLD_STATE_VH_SHOW             = 3816,
-    WORLD_STATE_VH_PRISON_STATE     = 3815,
-    WORLD_STATE_VH_WAVE_COUNT       = 3810,
-};
-
 enum Spells
 {
-    SPELL_CONTROL_CRYSTAL_ACTIVATION = 57804,
-    SPELL_ARCANE_LIGHTNING          = 57912,
-    SPELL_ARCANE_LIGHTNING_VISUAL   = 57930,
-    SPELL_PORTAL_CHANNEL            = 58012,
-    SPELL_DESTROY_DOOR_SEAL         = 58040,
-    SPELL_CYANIGOSA_TRANSFORM       = 58668,
-    SPELL_CYANIGOSA_BLUE_AURA       = 45870,
+    SPELL_CONTROL_CRYSTAL_ACTIVATION   = 57804,
+    SPELL_DEFENSE_SYSTEM_SPAWN_EFFECT  = 57886,
+    SPELL_DEFENSE_SYSTEM_VISUAL        = 57887,
+    SPELL_ARCANE_LIGHTNING             = 57912,
+    SPELL_ARCANE_LIGHTNING_VISUAL      = 57930,
+    SPELL_ARCANE_LIGHTNING_INSTAKILL   = 58152,
+    SPELL_PORTAL_CHANNEL               = 58012,
+    SPELL_DESTROY_DOOR_SEAL            = 58040,
+    SPELL_CYANIGOSA_TRANSFORM          = 58668,
+    SPELL_CYANIGOSA_BLUE_AURA          = 45870
 };
 
 enum Events
@@ -98,6 +113,10 @@ enum Events
     EVENT_SUMMON_PORTAL,
     EVENT_CYANIGOSSA_TRANSFORM,
     EVENT_CYANIGOSA_ATTACK,
+
+    // Event defense system
+    EVENT_ARCANE_LIGHTNING,
+    EVENT_ARCANE_LIGHTNING_INSTAKILL
 };
 
 enum Data
@@ -281,5 +300,11 @@ const float SaboteurFinalPos6[5][3] =
     {1929.338989f, 837.593933f, 47.137596f},
     {1931.063354f, 848.468445f, 47.190434f}
 };
+
+template <class AI, class T>
+inline AI* GetVioletHoldAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, VioletHoldScriptName);
+}
 
 #endif

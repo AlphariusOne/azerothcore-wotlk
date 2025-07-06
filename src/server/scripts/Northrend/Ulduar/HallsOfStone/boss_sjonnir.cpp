@@ -1,11 +1,24 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "halls_of_stone.h"
-#include "Player.h"
 
 enum Spells
 {
@@ -96,9 +109,9 @@ class boss_sjonnir : public CreatureScript
 public:
     boss_sjonnir() : CreatureScript("boss_sjonnir") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_sjonnirAI (pCreature);
+        return GetHallsOfStoneAI<boss_sjonnirAI>(pCreature);
     }
 
     struct boss_sjonnirAI : public ScriptedAI
@@ -115,7 +128,7 @@ public:
         uint8 SummonPhase;
         uint8 SlugeCount;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
             summons.DespawnAll();
@@ -128,53 +141,51 @@ public:
                 pInstance->SetData(BOSS_SJONNIR, NOT_STARTED);
                 pInstance->SetData(DATA_SJONNIR_ACHIEVEMENT, false);
 
-                me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
                 if (pInstance->GetData(BOSS_TRIBUNAL_OF_AGES) == DONE)
                 {
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-                    if (GameObject* doors = me->GetMap()->GetGameObject(pInstance->GetData64(GO_SJONNIR_DOOR)))
-                        doors->SetGoState(GO_STATE_ACTIVE);
+                    me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
 
-                    if (GameObject* console = me->GetMap()->GetGameObject( pInstance->GetData64(GO_SJONNIR_CONSOLE)))
+                    if (GameObject* console = me->GetMap()->GetGameObject( pInstance->GetGuidData(GO_SJONNIR_CONSOLE)))
                         console->SetGoState(GO_STATE_READY);
 
-                    if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
+                    if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
                     {
-                        brann->setDeathState(JUST_DIED);
+                        brann->setDeathState(DeathState::JustDied);
                         brann->Respawn();
-                        brann->AI()->DoAction(5);
+                        brann->AI()->DoAction(ACTION_SJONNIR_WIPE_START);
                     }
                 }
             }
         }
 
-        void EnterCombat(Unit*  /*who*/)
+        void JustEngagedWith(Unit*  /*who*/) override
         {
             Talk(SAY_AGGRO);
 
-            events.ScheduleEvent(EVENT_CHECK_HEALTH, 1000);
-            events.ScheduleEvent(EVENT_SHIELD, 14000 + rand() % 5000);
-            events.ScheduleEvent(EVENT_CHAIN_LIGHTNING, 6000 + rand() % 6000);
-            events.ScheduleEvent(EVENT_STATIC_CHARGE, 24000);
-            events.ScheduleEvent(EVENT_LIGHTNING_RING, 25000 + rand() % 6000);
-            events.ScheduleEvent(EVENT_SUMMON, 20000);
-            events.ScheduleEvent(EVENT_SUMMON, 21500);
-            events.ScheduleEvent(EVENT_SUMMON_SPEACH, 20000);
+            events.ScheduleEvent(EVENT_CHECK_HEALTH, 1s);
+            events.ScheduleEvent(EVENT_SHIELD, 14s, 19s);
+            events.ScheduleEvent(EVENT_CHAIN_LIGHTNING, 6s, 12s);
+            events.ScheduleEvent(EVENT_STATIC_CHARGE, 24s);
+            events.ScheduleEvent(EVENT_LIGHTNING_RING, 25s, 31s);
+            events.ScheduleEvent(EVENT_SUMMON, 20s);
+            events.ScheduleEvent(EVENT_SUMMON, 21s + 500ms);
+            events.ScheduleEvent(EVENT_SUMMON_SPEACH, 20s);
 
             if (pInstance)
             {
                 pInstance->SetData(BOSS_SJONNIR, IN_PROGRESS);
 
-                if (GameObject* doors = me->GetMap()->GetGameObject(pInstance->GetData64(GO_SJONNIR_DOOR)))
+                if (GameObject* doors = me->GetMap()->GetGameObject(pInstance->GetGuidData(GO_SJONNIR_DOOR)))
                     doors->SetGoState(GO_STATE_READY);
 
                 if (pInstance->GetData(BOSS_TRIBUNAL_OF_AGES) == DONE)
-                    if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
-                        brann->AI()->DoAction(3);
+                    if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
+                        brann->AI()->DoAction(ACTION_START_SJONNIR_FIGHT);
             }
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
             if (param == ACTION_SLUG_KILLED)
             {
@@ -184,7 +195,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -201,70 +212,67 @@ public:
                         {
                             SummonPhase = PHASE_SUMMON_OOZE;
                             events.CancelEvent(EVENT_SUMMON);
-                            events.ScheduleEvent(EVENT_SUMMON, 0);
-                            events.ScheduleEvent(EVENT_SUMMON, 1500);
+                            events.ScheduleEvent(EVENT_SUMMON, 0ms);
+                            events.ScheduleEvent(EVENT_SUMMON, 1500ms);
 
                             if (pInstance)
-                                if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
+                                if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
                                 {
-                                    brann->MonsterYell("What in the name o' Madoran did THAT do? Oh! Wait: I just about got it...", LANG_UNIVERSAL, 0);
-                                    brann->PlayDirectSound(14276);
+                                    brann->AI()->Talk(SAY_BRANN_SPAWN_OOZE);
                                 }
                         }
 
                         if (HealthBelowPct(20))
                         {
-                            if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
+                            if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
                             {
-                                brann->MonsterYell("Ha, that did it! Help's a-comin'! Take this, ya glowin' iron brute!", LANG_UNIVERSAL, 0);
-                                brann->PlayDirectSound(14277);
+                                brann->AI()->Talk(SAY_BRANN_SPAWN_EARTHEN);
                             }
                             SummonPhase = PHASE_SUMMON_FRIENDLY_DWARFES;
                             me->CastSpell(me, SPELL_FRENZY, false);
 
                             events.CancelEvent(EVENT_SUMMON);
-                            events.ScheduleEvent(EVENT_SUMMON, 0);
+                            events.ScheduleEvent(EVENT_SUMMON, 0ms);
                             break;
                         }
 
-                        events.RepeatEvent(1000);
+                        events.Repeat(1s);
                         break;
                     }
                 case EVENT_SHIELD:
                     {
                         me->CastSpell(me, DUNGEON_MODE(SPELL_LIGHTNING_SHIELD, SPELL_LIGHTNING_SHIELD_H), false);
-                        events.RepeatEvent(14000 + rand() % 5000);
+                        events.Repeat(14s, 19s);
                         break;
                     }
                 case EVENT_CHAIN_LIGHTNING:
                     {
-                        if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 50.0f, true, 0))
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true, 0))
                             me->CastSpell(target, DUNGEON_MODE(SPELL_CHAIN_LIGHTNING, SPELL_CHAIN_LIGHTNING_H), false);
 
-                        events.RepeatEvent(6000 + rand() % 6000);
+                        events.Repeat(6s, 12s);
                         break;
                     }
                 case EVENT_STATIC_CHARGE:
                     {
-                        if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 50.0f, true, 0))
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true, 0))
                             me->CastSpell(target, DUNGEON_MODE(SPELL_STATIC_CHARGE, SPELL_STATIC_CHARGE_H), false);
 
-                        events.RepeatEvent(20000);
+                        events.Repeat(20s);
                         break;
                     }
                 case EVENT_LIGHTNING_RING:
                     {
                         me->CastSpell(me, DUNGEON_MODE(SPELL_LIGHTNING_RING, SPELL_LIGHTNING_RING_H), false);
-                        events.RepeatEvent(25000 + rand() % 6000);
-                        events.DelayEvents(10000); // Channel duration
+                        events.Repeat(25s, 31s);
+                        events.DelayEvents(10s); // Channel duration
                         break;
                     }
                 case EVENT_SUMMON_SPEACH:
                     {
-                        if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
+                        if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
                         {
-                            brann->MonsterYell("This is a wee bit trickier that before... Oh, bloody--incomin'!", LANG_UNIVERSAL, 0);
-                            brann->PlayDirectSound(14275);
+                            brann->AI()->Talk(SAY_BRANN_SPAWN_TROGG);
                         }
 
                         break;
@@ -276,7 +284,7 @@ public:
                             case PHASE_SUMMON_UNFRIENDLY_DWARFES:
                                 {
                                     SummonDwarfes(false);
-                                    events.RepeatEvent(20000);
+                                    events.Repeat(20s);
                                     break;
                                 }
                             case PHASE_SUMMON_OOZE:
@@ -290,7 +298,7 @@ public:
                                             summons.Summon(ooze);
                                         }
                                     }
-                                    events.RepeatEvent(10000);
+                                    events.Repeat(10s);
                                     break;
                                 }
                             case PHASE_SUMMON_FRIENDLY_DWARFES:
@@ -306,7 +314,7 @@ public:
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit*  /*killer*/)
+        void JustDied(Unit*  /*killer*/) override
         {
             Talk(SAY_DEATH);
 
@@ -314,15 +322,15 @@ public:
             if (pInstance)
             {
                 pInstance->SetData(BOSS_SJONNIR, DONE);
-                if (GameObject* sd = me->GetMap()->GetGameObject(pInstance->GetData64(GO_SJONNIR_DOOR)))
+                if (GameObject* sd = me->GetMap()->GetGameObject(pInstance->GetGuidData(GO_SJONNIR_DOOR)))
                     sd->SetGoState(GO_STATE_ACTIVE);
 
-                if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_BRANN)))
-                    brann->AI()->DoAction(4);
+                if (Creature* brann = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_BRANN)))
+                    brann->AI()->DoAction(ACTION_SJONNIR_DEAD);
             }
         }
 
-        void KilledUnit(Unit* /*victim*/)
+        void KilledUnit(Unit* /*victim*/) override
         {
             if (urand(0, 1))
                 return;
@@ -333,7 +341,7 @@ public:
         void ActivatePipe(uint8 side)
         {
             if (pInstance)
-                if (GameObject* pipe = me->GetMap()->GetGameObject(pInstance->GetData64(side == POS_GEN_RIGHT ? GO_RIGHT_PIPE : GO_LEFT_PIPE)))
+                if (GameObject* pipe = me->GetMap()->GetGameObject(pInstance->GetGuidData(side == POS_GEN_RIGHT ? GO_RIGHT_PIPE : GO_LEFT_PIPE)))
                     pipe->SendCustomAnim(0);
         }
 
@@ -347,7 +355,7 @@ public:
                     if (Creature* dwarf = me->SummonCreature(NPC_DWARFES_FRIENDLY, RoomPosition[Pos].GetPositionX(), RoomPosition[Pos].GetPositionY(), RoomPosition[Pos].GetPositionZ(), 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 20000))
                     {
                         if (Player* plr = SelectTargetFromPlayerList(100.0f))
-                            dwarf->setFaction(plr->getFaction());
+                            dwarf->SetFaction(plr->GetFaction());
 
                         ActivatePipe(Pos);
                         dwarf->AI()->AttackStart(me);
@@ -377,16 +385,16 @@ class boss_sjonnir_dwarf : public CreatureScript
 public:
     boss_sjonnir_dwarf() : CreatureScript("boss_sjonnir_dwarf") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_sjonnir_dwarfAI (pCreature);
+        return GetHallsOfStoneAI<boss_sjonnir_dwarfAI>(pCreature);
     }
 
     struct boss_sjonnir_dwarfAI : public ScriptedAI
     {
         boss_sjonnir_dwarfAI(Creature* c) : ScriptedAI(c) { }
 
-        void UpdateAI(uint32  /*diff*/)
+        void UpdateAI(uint32  /*diff*/) override
         {
             if (!UpdateVictim())
                 return;
@@ -401,9 +409,9 @@ class boss_sjonnir_iron_sludge : public CreatureScript
 public:
     boss_sjonnir_iron_sludge() : CreatureScript("boss_sjonnir_iron_sludge") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_sjonnir_iron_sludgeAI (pCreature);
+        return GetHallsOfStoneAI<boss_sjonnir_iron_sludgeAI>(pCreature);
     }
 
     struct boss_sjonnir_iron_sludgeAI : public ScriptedAI
@@ -411,22 +419,22 @@ public:
         boss_sjonnir_iron_sludgeAI(Creature* c) : ScriptedAI(c) { }
 
         EventMap events;
-        void Reset()
+        void Reset() override
         {
             events.Reset();
         }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             events.ScheduleEvent(EVENT_TOXIC_VOLLEY, 5000);
         }
-        void JustDied(Unit*  /*killer*/)
+        void JustDied(Unit*  /*killer*/) override
         {
             if (InstanceScript* pInstance = me->GetInstanceScript())
-                if (Creature* sjonnir = ObjectAccessor::GetCreature(*me, pInstance->GetData64(NPC_SJONNIR)))
+                if (Creature* sjonnir = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_SJONNIR)))
                     sjonnir->AI()->DoAction(ACTION_SLUG_KILLED);
         }
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -441,7 +449,7 @@ public:
                 case EVENT_TOXIC_VOLLEY:
                     {
                         me->CastSpell(me, DUNGEON_MODE(SPELL_TOXIC_VOLLEY, SPELL_TOXIC_VOLLEY_H), false);
-                        events.RepeatEvent(5000);
+                        events.Repeat(5s);
                         break;
                     }
             }
@@ -457,9 +465,9 @@ class boss_sjonnir_malformed_ooze : public CreatureScript
 public:
     boss_sjonnir_malformed_ooze() : CreatureScript("boss_sjonnir_malformed_ooze") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_sjonnir_malformed_oozeAI (pCreature);
+        return GetHallsOfStoneAI<boss_sjonnir_malformed_oozeAI>(pCreature);
     }
 
     struct boss_sjonnir_malformed_oozeAI : public ScriptedAI
@@ -467,16 +475,16 @@ public:
         boss_sjonnir_malformed_oozeAI(Creature* c) : ScriptedAI(c) {    }
 
         EventMap events;
-        void MovementInform(uint32 type, uint32 point)
+        void MovementInform(uint32 type, uint32 point) override
         {
             if (type == POINT_MOTION_TYPE && point == 0)
-                events.RescheduleEvent(EVENT_MALFORMED_OOZE_CHECK, 1000);
+                events.RescheduleEvent(EVENT_MALFORMED_OOZE_CHECK, 1s);
         }
 
-        void EnterCombat(Unit*) { }
-        void MoveInLineOfSight(Unit*) { }
+        void JustEngagedWith(Unit*) override { }
+        void MoveInLineOfSight(Unit*) override { }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
             switch (events.ExecuteEvent())
@@ -489,13 +497,13 @@ public:
                             if ((*itr)->GetGUID() != me->GetGUID() && (*itr)->IsAlive() && me->IsAlive())
                                 if (Creature* is = me->SummonCreature(NPC_IRON_SLUDGE, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 20000))
                                 {
-                                    Unit::Kill(me, me);
+                                    me->KillSelf();
                                     Unit::Kill(*itr, *itr);
                                     is->SetInCombatWithZone();
                                     break;
                                 }
 
-                        events.RepeatEvent(1000);
+                        events.Repeat(1s);
                         break;
                     }
             }

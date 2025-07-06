@@ -1,11 +1,9 @@
 #ifndef _REGULAR_GRID_H
 #define _REGULAR_GRID_H
 
-
+#include <G3D/PositionTrait.h>
 #include <G3D/Ray.h>
 #include <G3D/Table.h>
-#include <G3D/BoundsTrait.h>
-#include <G3D/PositionTrait.h>
 
 #include "Errors.h"
 
@@ -23,7 +21,9 @@ public:
                 return;
             }
             else if (_nodes[i] == n)
+            {
                 return;
+            }
     }
     Node* _nodes[9];
 };
@@ -43,7 +43,6 @@ template<class T,
 class RegularGrid2D
 {
 public:
-
     enum
     {
         CELL_NUMBER = 64,
@@ -66,16 +65,18 @@ public:
     {
         for (int x = 0; x < CELL_NUMBER; ++x)
             for (int y = 0; y < CELL_NUMBER; ++y)
+            {
                 delete nodes[x][y];
+            }
     }
 
     void insert(const T& value)
     {
         G3D::Vector3 pos[9];
-        pos[0] = value.getBounds().corner(0);
-        pos[1] = value.getBounds().corner(1);
-        pos[2] = value.getBounds().corner(2);
-        pos[3] = value.getBounds().corner(3);
+        pos[0] = value.GetBounds().corner(0);
+        pos[1] = value.GetBounds().corner(1);
+        pos[2] = value.GetBounds().corner(2);
+        pos[3] = value.GetBounds().corner(3);
         pos[4] = (pos[0] + pos[1]) / 2.0f;
         pos[5] = (pos[1] + pos[2]) / 2.0f;
         pos[6] = (pos[2] + pos[3]) / 2.0f;
@@ -87,7 +88,9 @@ public:
         {
             Cell c = Cell::ComputeCell(pos[i].x, pos[i].y);
             if (!c.isValid())
+            {
                 continue;
+            }
             Node& node = getGridFor(pos[i].x, pos[i].y);
             na.AddNode(&node);
         }
@@ -95,9 +98,13 @@ public:
         for (uint8 i = 0; i < 9; ++i)
         {
             if (na._nodes[i])
+            {
                 na._nodes[i]->insert(value);
+            }
             else
+            {
                 break;
+            }
         }
 
         memberTable.set(&value, na);
@@ -109,9 +116,13 @@ public:
         for (uint8 i = 0; i < 9; ++i)
         {
             if (na._nodes[i])
+            {
                 na._nodes[i]->remove(value);
+            }
             else
+            {
                 break;
+            }
         }
 
         // Remove the member
@@ -123,7 +134,9 @@ public:
         for (int x = 0; x < CELL_NUMBER; ++x)
             for (int y = 0; y < CELL_NUMBER; ++y)
                 if (Node* n = nodes[x][y])
+                {
                     n->balance();
+                }
     }
 
     bool contains(const T& value) const { return memberTable.containsKey(&value); }
@@ -143,7 +156,6 @@ public:
         bool isValid() const { return x >= 0 && x < CELL_NUMBER && y >= 0 && y < CELL_NUMBER;}
     };
 
-
     Node& getGridFor(float fx, float fy)
     {
         Cell c = Cell::ComputeCell(fx, fy);
@@ -154,7 +166,9 @@ public:
     {
         ASSERT(x < CELL_NUMBER && y < CELL_NUMBER);
         if (!nodes[x][y])
+        {
             nodes[x][y] = NodeCreatorFunc::makeNode(x, y);
+        }
         return *nodes[x][y];
     }
 
@@ -169,14 +183,18 @@ public:
     {
         Cell cell = Cell::ComputeCell(ray.origin().x, ray.origin().y);
         if (!cell.isValid())
+        {
             return;
+        }
 
         Cell last_cell = Cell::ComputeCell(end.x, end.y);
 
         if (cell == last_cell)
         {
             if (Node* node = nodes[cell.x][cell.y])
+            {
                 node->intersectRay(ray, intersectCallback, max_dist, stopAtFirstHit);
+            }
             return;
         }
 
@@ -215,8 +233,8 @@ public:
         //int Cycles = std::max((int)ceilf(max_dist/tMaxX),(int)ceilf(max_dist/tMaxY));
         //int i = 0;
 
-        float tDeltaX = voxel * fabs(kx_inv);
-        float tDeltaY = voxel * fabs(ky_inv);
+        float tDeltaX = voxel * std::fabs(kx_inv);
+        float tDeltaY = voxel * std::fabs(ky_inv);
         do
         {
             if (Node* node = nodes[cell.x][cell.y])
@@ -225,7 +243,9 @@ public:
                 node->intersectRay(ray, intersectCallback, max_dist, stopAtFirstHit);
             }
             if (cell == last_cell)
+            {
                 break;
+            }
             if (tMaxX < tMaxY)
             {
                 tMaxX += tDeltaX;
@@ -245,9 +265,13 @@ public:
     {
         Cell cell = Cell::ComputeCell(point.x, point.y);
         if (!cell.isValid())
+        {
             return;
+        }
         if (Node* node = nodes[cell.x][cell.y])
+        {
             node->intersectPoint(point, intersectCallback);
+        }
     }
 
     // Optimized verson of intersectRay function for rays with vertical directions
@@ -256,9 +280,13 @@ public:
     {
         Cell cell = Cell::ComputeCell(ray.origin().x, ray.origin().y);
         if (!cell.isValid())
+        {
             return;
+        }
         if (Node* node = nodes[cell.x][cell.y])
+        {
             node->intersectRay(ray, intersectCallback, max_dist, false);
+        }
     }
 };
 

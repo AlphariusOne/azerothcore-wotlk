@@ -1,11 +1,24 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "halls_of_lightning.h"
 #include "SpellInfo.h"
+#include "halls_of_lightning.h"
 
 enum VolkahnSpells
 {
@@ -70,9 +83,9 @@ class boss_volkhan : public CreatureScript
 public:
     boss_volkhan() : CreatureScript("boss_volkhan") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_volkhanAI (creature);
+        return GetHallsOfLightningAI<boss_volkhanAI>(creature);
     }
 
     struct boss_volkhanAI : public ScriptedAI
@@ -90,7 +103,7 @@ public:
         uint8 PointID;
         uint8 ShatteredCount;
 
-        void Reset()
+        void Reset() override
         {
             x = y = z = PointID = ShatteredCount = 0;
             HealthCheck = 100;
@@ -106,7 +119,7 @@ public:
             }
         }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             me->SetInCombatWithZone();
             Talk(SAY_AGGRO);
@@ -117,7 +130,7 @@ public:
             ScheduleEvents(false);
         }
 
-        void JustDied(Unit*)
+        void JustDied(Unit*) override
         {
             Talk(SAY_DEATH);
 
@@ -168,9 +181,9 @@ public:
             }
         }
 
-        void KilledUnit(Unit* victim)
+        void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_PLAYER)
+            if (!victim->IsPlayer())
                 return;
 
             Talk(SAY_SLAY);
@@ -179,25 +192,25 @@ public:
         void ScheduleEvents(bool anvil)
         {
             events.SetPhase(1);
-            events.RescheduleEvent(EVENT_HEAT, 8000, 0, 1);
-            events.RescheduleEvent(EVENT_SHATTER, 10000, 0, 1);
-            events.RescheduleEvent(EVENT_CHECK_HEALTH, anvil ? 1000 : 6000, 0, 1);
-            events.RescheduleEvent(EVENT_POSITION, 4000, 0, 1);
+            events.RescheduleEvent(EVENT_HEAT, 8s, 0, 1);
+            events.RescheduleEvent(EVENT_SHATTER, 10s, 0, 1);
+            events.RescheduleEvent(EVENT_CHECK_HEALTH, anvil ? 1s : 6s, 0, 1);
+            events.RescheduleEvent(EVENT_POSITION, 4s, 0, 1);
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
             if (summon->GetEntry() == NPC_MOLTEN_GOLEM)
             {
-                summon->setFaction(me->getFaction());
+                summon->SetFaction(me->GetFaction());
 
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random))
                     summon->AI()->AttackStart(target);
             }
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
             if (param == ACTION_DESTROYED)
             {
@@ -207,7 +220,7 @@ public:
             }
         }
 
-        void MovementInform(uint32 type, uint32 id)
+        void MovementInform(uint32 type, uint32 id) override
         {
             if (type != POINT_MOTION_TYPE)
                 return;
@@ -230,10 +243,10 @@ public:
                 me->SetControlled(true, UNIT_STATE_ROOT);
             }
             else
-                events.ScheduleEvent(EVENT_MOVE_TO_ANVIL, 0, 0, 2);
+                events.ScheduleEvent(EVENT_MOVE_TO_ANVIL, 0ms, 0, 2);
         }
 
-        void SpellHitTarget(Unit* /*who*/, const SpellInfo* spellInfo)
+        void SpellHitTarget(Unit* /*who*/, SpellInfo const* spellInfo) override
         {
             if (spellInfo->Id == SPELL_TEMPER)
             {
@@ -256,10 +269,10 @@ public:
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
                 me->GetMotionMaster()->MovementExpired();
 
-            events.ScheduleEvent(EVENT_MOVE_TO_ANVIL, 0, 0, 2);
+            events.ScheduleEvent(EVENT_MOVE_TO_ANVIL, 0ms, 0, 2);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             //Return since we have no target
             if (!UpdateVictim())
@@ -274,17 +287,17 @@ public:
             {
                 case EVENT_HEAT:
                     me->CastSpell(me, me->GetMap()->IsHeroic() ? SPELL_HEAT_H : SPELL_HEAT_N, true);
-                    events.RepeatEvent(8000);
+                    events.Repeat(8s);
                     break;
                 case EVENT_CHECK_HEALTH:
                     if (HealthBelowPct(HealthCheck))
                         GoToAnvil();
 
-                    events.RepeatEvent(1000);
+                    events.Repeat(1s);
                     return;
                 case EVENT_SHATTER:
                     {
-                        events.RepeatEvent(10000);
+                        events.Repeat(10s);
                         summons.DoAction(ACTION_SHATTER);
                         break;
                     }
@@ -296,7 +309,7 @@ public:
                     if (me->GetDistance(1331.9f, -106, 56) > 95)
                         EnterEvadeMode();
                     else
-                        events.RepeatEvent(4000);
+                        events.Repeat(4s);
 
                     return;
             }
@@ -311,9 +324,9 @@ class npc_molten_golem : public CreatureScript
 public:
     npc_molten_golem() : CreatureScript("npc_molten_golem") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new npc_molten_golemAI (creature);
+        return GetHallsOfLightningAI<npc_molten_golemAI>(creature);
     }
 
     struct npc_molten_golemAI : public ScriptedAI
@@ -326,14 +339,14 @@ public:
         EventMap events;
         InstanceScript* m_pInstance;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
-            events.ScheduleEvent(EVENT_BLAST, 7000);
-            events.ScheduleEvent(EVENT_IMMOLATION, 3000);
+            events.ScheduleEvent(EVENT_BLAST, 7s);
+            events.ScheduleEvent(EVENT_IMMOLATION, 3s);
         }
 
-        void DamageTaken(Unit*, uint32& uiDamage, DamageEffectType, SpellSchoolMask)
+        void DamageTaken(Unit*, uint32& uiDamage, DamageEffectType, SpellSchoolMask) override
         {
             if (me->GetEntry() == NPC_BRITTLE_GOLEM)
             {
@@ -344,7 +357,7 @@ public:
             if (uiDamage >= me->GetHealth())
             {
                 me->UpdateEntry(NPC_BRITTLE_GOLEM, 0, false);
-                me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_DISABLE_MOVE);
+                me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_DISABLE_MOVE);
                 me->SetHealth(me->GetMaxHealth());
                 me->RemoveAllAuras();
                 me->AttackStop();
@@ -357,11 +370,11 @@ public:
             }
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
             if (me->GetEntry() == NPC_BRITTLE_GOLEM && param == ACTION_SHATTER)
             {
-                if (Creature* volkhan = ObjectAccessor::GetCreature(*me, m_pInstance->GetData64(TYPE_VOLKHAN)))
+                if (Creature* volkhan = ObjectAccessor::GetCreature(*me, m_pInstance->GetGuidData(TYPE_VOLKHAN)))
                     volkhan->AI()->DoAction(ACTION_DESTROYED);
 
                 me->CastSpell(me, me->GetMap()->IsHeroic() ? SPELL_SHATTER_H : SPELL_SHATTER_N, true);
@@ -369,7 +382,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             //Return since we have no target or if we are frozen
             if (!UpdateVictim() || me->GetEntry() == NPC_BRITTLE_GOLEM)
@@ -384,11 +397,11 @@ public:
             {
                 case EVENT_BLAST:
                     me->CastSpell(me, SPELL_BLAST_WAVE, false);
-                    events.RepeatEvent(14000);
+                    events.Repeat(14s);
                     break;
                 case EVENT_IMMOLATION:
                     me->CastSpell(me->GetVictim(), me->GetMap()->IsHeroic() ? SPELL_IMMOLATION_STRIKE_H : SPELL_IMMOLATION_STRIKE_N, false);
-                    events.RepeatEvent(5000);
+                    events.Repeat(5s);
                     break;
             }
 
@@ -435,71 +448,71 @@ class npc_hol_monument : public CreatureScript
 public:
     npc_hol_monument() : CreatureScript("npc_hol_monument") {}
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new npc_hol_monumentAI(creature);
+        return GetHallsOfLightningAI<npc_hol_monumentAI>(creature);
     }
 
     struct npc_hol_monumentAI : public ScriptedAI
     {
         npc_hol_monumentAI(Creature* creature) : ScriptedAI(creature)
         {
-            _attackGUID = 0;
+            _attackGUID.Clear();
             _isActive = urand(0, 1);
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
             me->CastSpell(me, SPELL_FREEZE_ANIM, true);
         }
 
         EventMap events;
         bool _isActive;
-        uint64 _attackGUID;
+        ObjectGuid _attackGUID;
 
-        void Reset()
+        void Reset() override
         {
         }
 
-        void MoveInLineOfSight(Unit* who)
+        void MoveInLineOfSight(Unit* who) override
         {
             if (_attackGUID)
                 ScriptedAI::MoveInLineOfSight(who);
-            else if (_isActive && who->GetTypeId() == TYPEID_PLAYER)
+            else if (_isActive && who->IsPlayer())
             {
                 if ((who->GetPositionX() < me->GetPositionX() || who->GetPositionY() < -220.0f) && me->GetDistance2d(who) < 40)
                 {
                     _isActive = false;
                     _attackGUID = who->GetGUID();
                     events.Reset();
-                    events.RescheduleEvent(EVENT_UNFREEZE, 5000);
+                    events.RescheduleEvent(EVENT_UNFREEZE, 5s);
                 }
             }
         }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             events.Reset();
             if (me->GetEntry() == 28961) // NPC_TITANIUM_SIEGEBREAKER
             {
-                events.ScheduleEvent(EVENT_PIERCING_HOWL, 10000 + rand() % 15000);
-                events.ScheduleEvent(EVENT_PENETRATING_STRIKE, 5000 + rand() % 5000);
-                events.ScheduleEvent(EVENT_FRIGHTENING_SHOUT, 20000 + rand() % 8000);
-                events.ScheduleEvent(EVENT_BLADE_TURNING, 12000);
+                events.ScheduleEvent(EVENT_PIERCING_HOWL, 10s, 25s);
+                events.ScheduleEvent(EVENT_PENETRATING_STRIKE, 5s, 10s);
+                events.ScheduleEvent(EVENT_FRIGHTENING_SHOUT, 20s, 28s);
+                events.ScheduleEvent(EVENT_BLADE_TURNING, 12s);
             }
             else
             {
-                events.ScheduleEvent(EVENT_THROW, 10000 + rand() % 15000);
-                events.ScheduleEvent(EVENT_DEADLY_THROW, 15000 + rand() % 15000);
-                events.ScheduleEvent(EVENT_DEFLECTION, 15000);
+                events.ScheduleEvent(EVENT_THROW, 10s, 25s);
+                events.ScheduleEvent(EVENT_DEADLY_THROW, 15s, 30s);
+                events.ScheduleEvent(EVENT_DEFLECTION, 15s);
             }
         }
 
-        void AttackStart(Unit* who)
+        void AttackStart(Unit* who) override
         {
             if (!_attackGUID || !_isActive)
                 return;
             ScriptedAI::AttackStart(who);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!_isActive && !_attackGUID)
                 return;
@@ -509,7 +522,7 @@ public:
 
             if (eventId == EVENT_UNFREEZE)
             {
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
                 me->CastSpell(me, SPELL_AWAKEN, true);
                 me->RemoveAllAuras();
                 _isActive = true;
@@ -529,31 +542,31 @@ public:
             {
                 case EVENT_PIERCING_HOWL:
                     me->CastSpell(me->GetVictim(), SPELL_PIERCING_HOWL, false);
-                    events.RepeatEvent(10000 + rand() % 1500);
+                    events.Repeat(10s, 25s);
                     break;
                 case EVENT_PENETRATING_STRIKE:
                     me->CastSpell(me->GetVictim(), SPELL_PENETRATING_STRIKE, false);
-                    events.RepeatEvent(5000 + rand() % 5000);
+                    events.Repeat(5s, 10s);
                     break;
                 case EVENT_FRIGHTENING_SHOUT:
                     me->CastSpell(me->GetVictim(), SPELL_FRIGHTENING_SHOUT, false);
-                    events.RepeatEvent(20000 + rand() % 8000);
+                    events.Repeat(20s, 28s);
                     break;
                 case EVENT_BLADE_TURNING:
                     me->CastSpell(me->GetVictim(), me->GetMap()->IsHeroic() ? SPELL_BLADE_TURNING_H : SPELL_BLADE_TURNING_N, false);
-                    events.RepeatEvent(12000);
+                    events.Repeat(12s);
                     break;
                 case EVENT_THROW:
-                    me->CastSpell(SelectTarget(SELECT_TARGET_RANDOM, 0, 50.0f, true, 0), me->GetMap()->IsHeroic() ? SPELL_THROW_H : SPELL_THROW_N, true);
-                    events.RepeatEvent(10000 + rand() % 15000);
+                    me->CastSpell(SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true, 0), me->GetMap()->IsHeroic() ? SPELL_THROW_H : SPELL_THROW_N, true);
+                    events.Repeat(10s, 25s);
                     break;
                 case EVENT_DEADLY_THROW:
-                    me->CastSpell(SelectTarget(SELECT_TARGET_RANDOM, 0, 50.0f, true, 0), me->GetMap()->IsHeroic() ? SPELL_DEADLY_THROW_H : SPELL_DEADLY_THROW_N, true);
-                    events.RepeatEvent(15000 + rand() % 15000);
+                    me->CastSpell(SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true, 0), me->GetMap()->IsHeroic() ? SPELL_DEADLY_THROW_H : SPELL_DEADLY_THROW_N, true);
+                    events.Repeat(15s, 30s);
                     break;
                 case EVENT_DEFLECTION:
                     me->CastSpell(me, me->GetMap()->IsHeroic() ? SPELL_DEFLECTION_H : SPELL_DEFLECTION_N, false);
-                    events.RepeatEvent(15000);
+                    events.Repeat(15s);
                     break;
             }
 

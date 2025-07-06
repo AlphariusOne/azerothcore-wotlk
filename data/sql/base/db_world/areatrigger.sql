@@ -1,16 +1,28 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `areatrigger`
+--
+
 DROP TABLE IF EXISTS `areatrigger`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `areatrigger` 
-(
-  `entry` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `map` int(10) unsigned NOT NULL DEFAULT '0',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `areatrigger` (
+  `entry` int unsigned NOT NULL AUTO_INCREMENT,
+  `map` int unsigned NOT NULL DEFAULT '0',
   `x` float NOT NULL DEFAULT '0',
   `y` float NOT NULL DEFAULT '0',
   `z` float NOT NULL DEFAULT '0',
@@ -20,12 +32,16 @@ CREATE TABLE `areatrigger`
   `height` float NOT NULL DEFAULT '0' COMMENT 'Most commonly used when size is 0, but not always',
   `orientation` float NOT NULL DEFAULT '0' COMMENT 'Most commonly used when size is 0, but not always',
   PRIMARY KEY (`entry`)
-) ENGINE=InnoDB AUTO_INCREMENT=5873 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=5873 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `areatrigger`
+--
 
 LOCK TABLES `areatrigger` WRITE;
 /*!40000 ALTER TABLE `areatrigger` DISABLE KEYS */;
-INSERT INTO `areatrigger` VALUES 
+INSERT INTO `areatrigger` VALUES
 (45,0,2924.38,-798.429,161.611,8,0,0,0,0),
 (71,0,-10645.9,1179.06,48.1781,27,0,0,0,0),
 (78,0,-11208.5,1685.34,25.7612,7,0,0,0,0),
@@ -1245,10 +1261,14 @@ INSERT INTO `areatrigger` VALUES
 (5872,724,3286.8,533.392,98.5718,0,5,16,24,6.248);
 /*!40000 ALTER TABLE `areatrigger` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:33:15
 

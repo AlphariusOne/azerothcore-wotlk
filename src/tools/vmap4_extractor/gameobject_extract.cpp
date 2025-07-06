@@ -1,24 +1,33 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "model.h"
-#include "dbcfile.h"
 #include "adtfile.h"
+#include "dbcfile.h"
+#include "model.h"
 #include "vmapexport.h"
-
-#include <algorithm>
-#include <stdio.h>
+#include <cstdio>
 
 bool ExtractSingleModel(std::string& fname)
 {
-    char* name = GetPlainName((char*)fname.c_str());
-    char* ext = GetExtension(name);
+    if (fname.length() < 4)
+        return false;
 
-    // < 3.1.0 ADT MMDX section store filename.mdx filenames for corresponded .m2 file
-    if (!strcmp(ext, ".mdx"))
+    std::string extension = fname.substr(fname.length() - 4, 4);
+    if (extension == ".mdx" || extension == ".MDX" || extension == ".mdl" || extension == ".MDL")
     {
         // replace .mdx -> .m2
         fname.erase(fname.length() - 2, 2);
@@ -27,6 +36,12 @@ bool ExtractSingleModel(std::string& fname)
     // >= 3.1.0 ADT MMDX section store filename.m2 filenames for corresponded .m2 file
     // nothing do
 
+    std::string originalName = fname;
+
+    char* name = GetPlainName((char*)fname.c_str());
+    fixnamen(name, strlen(name));
+    fixname2(name, strlen(name));
+
     std::string output(szWorkDirWmo);
     output += "/";
     output += name;
@@ -34,7 +49,7 @@ bool ExtractSingleModel(std::string& fname)
     if (FileExists(output.c_str()))
         return true;
 
-    Model mdl(fname);
+    Model mdl(originalName);
     if (!mdl.open())
         return false;
 
@@ -63,9 +78,11 @@ void ExtractGameobjectModels()
         return;
     }
 
-    for (DBCFile::Iterator it = dbc.begin(); it != dbc.end(); ++it)
+    fwrite(VMAP::RAW_VMAP_MAGIC, 1, 8, model_list);
+
+    for (const auto & it : dbc)
     {
-        path = it->getString(1);
+        path = it.getString(1);
 
         if (path.length() < 4)
             continue;
@@ -81,13 +98,15 @@ void ExtractGameobjectModels()
         strToLower(ch_ext);
 
         bool result = false;
+        uint8 isWmo = 0;
         if (!strcmp(ch_ext, ".wmo"))
         {
+            isWmo = 1;
             result = ExtractSingleWmo(path);
         }
         else if (!strcmp(ch_ext, ".mdl"))
         {
-            // TODO: extract .mdl files, if needed
+            /// @todo: extract .mdl files, if needed
             continue;
         }
         else //if (!strcmp(ch_ext, ".mdx") || !strcmp(ch_ext, ".m2"))
@@ -97,9 +116,10 @@ void ExtractGameobjectModels()
 
         if (result)
         {
-            uint32 displayId = it->getUInt(0);
+            uint32 displayId = it.getUInt(0);
             uint32 path_length = strlen(name);
             fwrite(&displayId, sizeof(uint32), 1, model_list);
+            fwrite(&isWmo, sizeof(uint8), 1, model_list);
             fwrite(&path_length, sizeof(uint32), 1, model_list);
             fwrite(name, sizeof(char), path_length, model_list);
         }

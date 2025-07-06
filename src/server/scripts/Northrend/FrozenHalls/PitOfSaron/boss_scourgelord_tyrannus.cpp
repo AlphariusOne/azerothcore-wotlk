@@ -1,22 +1,34 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "pit_of_saron.h"
 #include "Vehicle.h"
+#include "pit_of_saron.h"
 
 enum Texts
 {
-    SAY_AGGRO                           = 53,
-    SAY_SLAY_1                          = 54,
-    SAY_SLAY_2                          = 55,
-    SAY_DEATH                           = 56,
-    SAY_MARK                            = 57,
-    SAY_SMASH                           = 58,
-    EMOTE_RIMEFANG_ICEBOLT              = 59,
-    EMOTE_SMASH                         = 60,
+    SAY_AGGRO                           = 2,
+    SAY_SLAY                            = 3,
+    SAY_DEATH                           = 4,
+    SAY_MARK                            = 5,
+    EMOTE_MARK                          = 6,
+    SAY_DARK_MIGHT                      = 7,
+    EMOTE_DARK_MIGHT                    = 8,
 };
 
 enum Spells
@@ -51,49 +63,48 @@ public:
         {
             pInstance = me->GetInstanceScript();
             me->SetReactState(REACT_PASSIVE);
-            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_RIMEFANG_GUID)))
+            if (Creature* rimefang = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_RIMEFANG_GUID)))
             {
-                c->SetCanFly(true);
+                rimefang->SetCanFly(true);
             }
         }
 
         InstanceScript* pInstance;
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
             events.Reset();
-            if (me->HasReactState(REACT_AGGRESSIVE)) // Reset() called by EnterEvadeMode()
-            {
-                if (!pInstance)
-                    return;
-                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_MARTIN_OR_GORKUN_GUID)))
-                {
-                    c->AI()->DoAction(1);
-                    c->DespawnOrUnsummon();
-                    pInstance->SetData64(DATA_MARTIN_OR_GORKUN_GUID, 0);
-                }
-                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_RIMEFANG_GUID)))
-                {
-                    c->GetMotionMaster()->Clear();
-                    c->GetMotionMaster()->MoveIdle();
-
-                    c->RemoveAllAuras();
-                    c->UpdatePosition(1017.3f, 168.974f, 642.926f, 5.2709f, true);
-                    c->StopMovingOnCurrentPos();
-                    if (Vehicle* v = c->GetVehicleKit())
-                        v->InstallAllAccessories(false);
-                }
-            }
+            pInstance->SetData(DATA_TYRANNUS, NOT_STARTED);
         }
 
-        void DoAction(int32 param)
+        void EnterEvadeMode(EvadeReason /*why*/) override
+        {
+            if (!pInstance)
+                return;
+
+            if (Creature* creature = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_MARTIN_OR_GORKUN_GUID)))
+            {
+                creature->AI()->DoAction(1);
+                creature->DespawnOrUnsummon();
+                pInstance->SetGuidData(DATA_MARTIN_OR_GORKUN_GUID, ObjectGuid::Empty);
+            }
+
+            // Tyrannus is temporarily spawned as Rimefang's rider. If he evades, despawn Rimefang.
+            // Tyrannus will be respawned once Rimefang respawns.
+            if (Creature* rimefang = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_RIMEFANG_GUID)))
+                rimefang->DespawnOnEvade();
+
+            me->DespawnOrUnsummon();
+        }
+
+        void DoAction(int32 param) override
         {
             if (param == 1)
             {
                 Position exitPos = {1023.46f, 159.12f, 628.2f, 5.23f};
-                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_RIMEFANG_GUID)))
+                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_RIMEFANG_GUID)))
                 {
                     c->RemoveAura(46598);
                     c->GetMotionMaster()->Clear();
@@ -104,19 +115,19 @@ public:
 
                 // start real fight
                 me->RemoveAllAuras();
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+                me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
                 DoZoneInCombat();
                 me->CastSpell(me, 43979, true);
                 Talk(SAY_AGGRO);
                 events.Reset();
-                events.RescheduleEvent(EVENT_SPELL_FORCEFUL_SMASH, urand(14000, 16000));
-                events.RescheduleEvent(EVENT_SPELL_OVERLORDS_BRAND, urand(4000, 6000));
-                events.RescheduleEvent(EVENT_RIMEFANG_SPELL_ICY_BLAST, 5000);
-                events.RescheduleEvent(EVENT_SPELL_MARK_OF_RIMEFANG, 25000);
+                events.RescheduleEvent(EVENT_SPELL_FORCEFUL_SMASH, 14s, 16s);
+                events.RescheduleEvent(EVENT_SPELL_OVERLORDS_BRAND, 4s, 6s);
+                events.RescheduleEvent(EVENT_RIMEFANG_SPELL_ICY_BLAST, 5s);
+                events.RescheduleEvent(EVENT_SPELL_MARK_OF_RIMEFANG, 25s);
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -128,7 +139,7 @@ public:
                 if (TSDistCheckPos.GetExactDist(x, y, z) > 100.0f || z > TSDistCheckPos.GetPositionZ() + 20.0f || z < TSDistCheckPos.GetPositionZ() - 20.0f)
                 {
                     me->SetHealth(me->GetMaxHealth());
-                    EnterEvadeMode();
+                    EnterEvadeMode(EVADE_REASON_OTHER);
                     return;
                 }
             }
@@ -138,7 +149,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -146,47 +157,47 @@ public:
                     if (me->IsWithinMeleeRange(me->GetVictim()))
                     {
                         me->CastSpell(me->GetVictim(), SPELL_FORCEFUL_SMASH, false);
-                        
-                        events.RescheduleEvent(EVENT_SPELL_UNHOLY_POWER, 1000);
+
+                        events.RescheduleEvent(EVENT_SPELL_UNHOLY_POWER, 1s);
                         break;
                     }
                     events.RepeatEvent(3000);
                     break;
                 case EVENT_SPELL_UNHOLY_POWER:
-                    Talk(SAY_SMASH);
-                    Talk(EMOTE_SMASH);
+                    Talk(SAY_DARK_MIGHT);
+                    Talk(EMOTE_DARK_MIGHT);
                     me->CastSpell(me, SPELL_UNHOLY_POWER, false);
-                    
-                    events.ScheduleEvent(EVENT_SPELL_FORCEFUL_SMASH, urand(40000, 48000));
+
+                    events.ScheduleEvent(EVENT_SPELL_FORCEFUL_SMASH, 40s, 48s);
                     break;
                 case EVENT_SPELL_OVERLORDS_BRAND:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 95.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 95.0f, true))
                         me->CastSpell(target, SPELL_OVERLORDS_BRAND, false);
-                    events.RepeatEvent(urand(11000, 12000));
+                    events.Repeat(11s, 12s);
                     break;
                 case EVENT_RIMEFANG_SPELL_ICY_BLAST:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 190.0f, true))
-                        if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_RIMEFANG_GUID)))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 190.0f, true))
+                        if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_RIMEFANG_GUID)))
                             c->CastSpell(target, RIMEFANG_SPELL_ICY_BLAST, false);
-                    events.RepeatEvent(5000);
+                    events.Repeat(5s);
                     break;
                 case EVENT_SPELL_MARK_OF_RIMEFANG:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 190.0f, true))
-                        if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_RIMEFANG_GUID)))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 190.0f, true))
+                        if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_RIMEFANG_GUID)))
                         {
                             Talk(SAY_MARK);
-                            c->AI()->Talk(EMOTE_RIMEFANG_ICEBOLT, target);
+                            Talk(EMOTE_MARK, target);
                             c->CastSpell(target, RIMEFANG_SPELL_HOARFROST, false);
                         }
-                    events.RepeatEvent(25000);
-                    events.RescheduleEvent(EVENT_RIMEFANG_SPELL_ICY_BLAST, 10000);
+                    events.Repeat(25s);
+                    events.RescheduleEvent(EVENT_RIMEFANG_SPELL_ICY_BLAST, 10s);
                     break;
             }
 
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             Talk(SAY_DEATH);
             if (pInstance)
@@ -195,13 +206,13 @@ public:
                 me->ToTempSummon()->SetTempSummonType(TEMPSUMMON_MANUAL_DESPAWN);
         }
 
-        void KilledUnit(Unit* who)
+        void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() == TYPEID_PLAYER)
-                Talk(RAND(SAY_SLAY_1, SAY_SLAY_2));
+            if (who->IsPlayer())
+                Talk(SAY_SLAY);
         }
 
-        bool CanAIAttack(const Unit* who) const
+        bool CanAIAttack(Unit const* who) const override
         {
             switch (who->GetEntry())
             {
@@ -220,9 +231,9 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_tyrannusAI(creature);
+        return GetPitOfSaronAI<boss_tyrannusAI>(creature);
     }
 };
 

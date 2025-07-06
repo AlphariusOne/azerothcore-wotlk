@@ -1,14 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef _TILEASSEMBLER_H_
 #define _TILEASSEMBLER_H_
 
-#include <G3D/Vector3.h>
 #include <G3D/Matrix3.h>
+#include <G3D/Vector3.h>
 #include <map>
 #include <set>
 
@@ -28,15 +39,15 @@ namespace VMAP
     private:
         G3D::Matrix3 iRotation;
     public:
-        ModelPosition(): iScale(0.0f) { }
+        ModelPosition() { }
         G3D::Vector3 iPos;
         G3D::Vector3 iDir;
-        float iScale;
+        float iScale{0.0f};
         void init()
         {
             iRotation = G3D::Matrix3::fromEulerAnglesZYX(G3D::pif() * iDir.y / 180.f, G3D::pif() * iDir.x / 180.f, G3D::pif() * iDir.z / 180.f);
         }
-        G3D::Vector3 transform(const G3D::Vector3& pIn) const;
+        [[nodiscard]] G3D::Vector3 transform(const G3D::Vector3& pIn) const;
         void moveToBasePos(const G3D::Vector3& pBasePos) { iPos -= pBasePos; }
     };
 
@@ -54,17 +65,17 @@ namespace VMAP
 
     struct GroupModel_Raw
     {
-        uint32 mogpflags;
-        uint32 GroupWMOID;
+        uint32 mogpflags{0};
+        uint32 GroupWMOID{0};
 
         G3D::AABox bounds;
-        uint32 liquidflags;
+        uint32 liquidflags{0};
         std::vector<MeshTriangle> triangles;
         std::vector<G3D::Vector3> vertexArray;
         class WmoLiquid* liquid;
 
-        GroupModel_Raw() : mogpflags(0), GroupWMOID(0), liquidflags(0),
-            liquid(NULL) { }
+        GroupModel_Raw() : liquid(nullptr) { }
+
         ~GroupModel_Raw();
 
         bool Read(FILE* f);
@@ -83,9 +94,7 @@ namespace VMAP
     private:
         std::string iDestDir;
         std::string iSrcDir;
-        bool (*iFilterMethod)(char* pName);
         G3D::Table<std::string, unsigned int > iUniqueNameIds;
-        unsigned int iCurrentUniqueNameId;
         MapData mapData;
         std::set<std::string> spawnedModelFiles;
 
@@ -99,8 +108,6 @@ namespace VMAP
         void exportGameobjectModels();
 
         bool convertRawFile(const std::string& pModelFilename);
-        void setModelNameFilterMethod(bool (*pFilterMethod)(char* pName)) { iFilterMethod = pFilterMethod; }
-        std::string getDirEntryNameFromModName(unsigned int pMapId, const std::string& pModPosName);
     };
 
 }                                                           // VMAP

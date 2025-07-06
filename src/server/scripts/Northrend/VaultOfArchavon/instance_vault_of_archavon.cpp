@@ -1,16 +1,28 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "vault_of_archavon.h"
 #include "Battlefield.h"
 #include "BattlefieldMgr.h"
-#include "SpellAuras.h"
+#include "GameTime.h"
+#include "InstanceMapScript.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
+#include "SpellAuras.h"
+#include "vault_of_archavon.h"
 
 /* Vault of Archavon encounters:
 1 - Archavon the Stone Watcher event
@@ -22,7 +34,7 @@
 class instance_vault_of_archavon : public InstanceMapScript
 {
 public:
-    instance_vault_of_archavon() : InstanceMapScript("instance_vault_of_archavon", 624) { }
+    instance_vault_of_archavon() : InstanceMapScript("instance_vault_of_archavon", MAP_VAULT_OF_ARCHAVON) { }
 
     struct instance_vault_of_archavon_InstanceMapScript : public InstanceScript
     {
@@ -30,10 +42,10 @@ public:
         {
         }
 
-        void Initialize()
+        void Initialize() override
         {
+            SetHeaders(DataHeader);
             memset(&m_auiEncounter, 0, sizeof(m_auiEncounter));
-            memset(&bossGUIDs, 0, sizeof(bossGUIDs));
 
             ArchavonDeath = 0;
             EmalonDeath = 0;
@@ -42,7 +54,7 @@ public:
             stoned = false;
         }
 
-        void OnPlayerEnter(Player* )
+        void OnPlayerEnter(Player* ) override
         {
             if (stoned)
             {
@@ -55,7 +67,7 @@ public:
             }
         }
 
-        void Update(uint32 diff)
+        void Update(uint32 diff) override
         {
             checkTimer += diff;
             if (checkTimer >= 60000)
@@ -68,10 +80,10 @@ public:
                         if (bf->GetTimer() <= (16 * MINUTE * IN_MILLISECONDS) && bf->GetTimer() >= (15 * MINUTE * IN_MILLISECONDS))
                         {
                             Map::PlayerList const& PlayerList = instance->GetPlayers();
-                            if (!PlayerList.isEmpty())
+                            if (!PlayerList.IsEmpty())
                                 for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
                                     if (Player* player = i->GetSource())
-                                        player->MonsterTextEmote("This instance will reset in 15 minutes.", 0, true);
+                                        player->TextEmote("This instance will reset in 15 minutes.", nullptr, true);
                         }
                         else if (bf->GetTimer() <= (10 * MINUTE * IN_MILLISECONDS) && bf->GetTimer() >= (9 * MINUTE * IN_MILLISECONDS))
                         {
@@ -92,10 +104,10 @@ public:
                         else if (bf->GetTimer() <= (2 * MINUTE * IN_MILLISECONDS) && bf->GetTimer() > (MINUTE * IN_MILLISECONDS))
                         {
                             Map::PlayerList const& PlayerList = instance->GetPlayers();
-                            if (!PlayerList.isEmpty())
+                            if (!PlayerList.IsEmpty())
                                 for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
                                     if (Player* player = i->GetSource())
-                                        player->MonsterTextEmote("This instance is about to reset. Prepare to be removed.", 0, true);
+                                        player->TextEmote("This instance is about to reset. Prepare to be removed.", nullptr, true);
                         }
                         else if (bf->GetTimer() <= MINUTE * IN_MILLISECONDS)
                         {
@@ -105,7 +117,7 @@ public:
                                         cr->AI()->EnterEvadeMode();
 
                             Map::PlayerList const& PlayerList = instance->GetPlayers();
-                            if (!PlayerList.isEmpty())
+                            if (!PlayerList.IsEmpty())
                                 for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
                                     if (Player* player = i->GetSource())
                                         player->TeleportTo(player->m_homebindMapId, player->m_homebindX, player->m_homebindY, player->m_homebindZ, player->GetOrientation());
@@ -115,7 +127,7 @@ public:
             }
         }
 
-        bool IsEncounterInProgress() const
+        bool IsEncounterInProgress() const override
         {
             for (uint8 i = 0; i < MAX_ENCOUNTER; ++i)
                 if (m_auiEncounter[i] == IN_PROGRESS)
@@ -128,7 +140,7 @@ public:
             return false;
         }
 
-        void OnCreatureCreate(Creature* creature)
+        void OnCreatureCreate(Creature* creature) override
         {
             switch (creature->GetEntry())
             {
@@ -147,23 +159,24 @@ public:
             }
         }
 
-        uint64 GetData64(uint32 identifier) const
+        ObjectGuid GetGuidData(uint32 identifier) const override
         {
             if (identifier < MAX_ENCOUNTER)
                 return bossGUIDs[identifier];
-            return 0;
+
+            return ObjectGuid::Empty;
         }
 
-        uint32 GetData(uint32 identifier) const
+        uint32 GetData(uint32 identifier) const override
         {
             if (identifier == DATA_STONED)
                 return (uint32)stoned;
             return 0;
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
-            switch(type)
+            switch (type)
             {
                 case EVENT_ARCHAVON:
                 case EVENT_EMALON:
@@ -179,13 +192,13 @@ public:
                 switch (type)
                 {
                     case EVENT_ARCHAVON:
-                        ArchavonDeath = time(nullptr);
+                        ArchavonDeath = GameTime::GetGameTime().count();
                         break;
                     case EVENT_EMALON:
-                        EmalonDeath = time(nullptr);
+                        EmalonDeath = GameTime::GetGameTime().count();
                         break;
                     case EVENT_KORALON:
-                        KoralonDeath = time(nullptr);
+                        KoralonDeath = GameTime::GetGameTime().count();
                         break;
                     default:
                         return;
@@ -196,7 +209,7 @@ public:
             }
         }
 
-        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const* /*source*/, Unit const* /*target*/, uint32 /*miscvalue1*/)
+        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const* /*source*/, Unit const* /*target*/, uint32 /*miscvalue1*/) override
         {
             switch (criteria_id)
             {
@@ -205,10 +218,10 @@ public:
                     if (ArchavonDeath && EmalonDeath && KoralonDeath)
                     {
                         // instance difficulty check is already done in db (achievement_criteria_data)
-                        // int() for Visual Studio, compile errors with abs(time_t)
-                        return (abs(int(ArchavonDeath - EmalonDeath)) < MINUTE && \
-                                abs(int(EmalonDeath - KoralonDeath)) < MINUTE && \
-                                abs(int(KoralonDeath - ArchavonDeath)) < MINUTE);
+                        // int() for Visual Studio, compile errors with std::abs(time_t)
+                        return (std::abs(int(ArchavonDeath - EmalonDeath)) < MINUTE && \
+                                std::abs(int(EmalonDeath - KoralonDeath)) < MINUTE && \
+                                std::abs(int(KoralonDeath - ArchavonDeath)) < MINUTE);
                     }
                     break;
                 default:
@@ -218,44 +231,20 @@ public:
             return false;
         }
 
-        std::string GetSaveData()
+        void ReadSaveDataMore(std::istringstream& data) override
         {
-            OUT_SAVE_INST_DATA;
-
-            std::ostringstream saveStream;
-            saveStream << "V O A " << m_auiEncounter[0] << ' ' << m_auiEncounter[1] << ' ' << m_auiEncounter[2] << ' ' << m_auiEncounter[3];
-
-            OUT_SAVE_INST_DATA_COMPLETE;
-            return saveStream.str();
+            data >> m_auiEncounter[0];
+            data >> m_auiEncounter[1];
+            data >> m_auiEncounter[2];
+            data >> m_auiEncounter[3];
         }
 
-        void Load(const char* in)
+        void WriteSaveDataMore(std::ostringstream& data) override
         {
-            if (!in)
-            {
-                OUT_LOAD_INST_DATA_FAIL;
-                return;
-            }
-
-            OUT_LOAD_INST_DATA(in);
-
-            char dataHead1, dataHead2, dataHead3;
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2 >> dataHead3;
-
-            if (dataHead1 == 'V' && dataHead2 == 'O' && dataHead3 == 'A')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTER; ++i)
-                {
-                    loadStream >> m_auiEncounter[i];
-                    if (m_auiEncounter[i] == IN_PROGRESS)
-                        m_auiEncounter[i] = NOT_STARTED;
-                }
-
-                OUT_LOAD_INST_DATA_COMPLETE;
-            }
-            else
-                OUT_LOAD_INST_DATA_FAIL;
+            data << m_auiEncounter[0] << ' '
+                << m_auiEncounter[1] << ' '
+                << m_auiEncounter[2] << ' '
+                << m_auiEncounter[3];
         }
 
     private:
@@ -266,10 +255,10 @@ public:
         bool stoned;
 
         uint32 m_auiEncounter[MAX_ENCOUNTER];
-        uint64 bossGUIDs[MAX_ENCOUNTER];
+        ObjectGuid bossGUIDs[MAX_ENCOUNTER];
     };
 
-    InstanceScript* GetInstanceScript(InstanceMap* map) const
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
         return new instance_vault_of_archavon_InstanceMapScript(map);
     }

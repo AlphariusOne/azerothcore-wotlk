@@ -1,12 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
+#include "CreatureScript.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
+#include "mana_tombs.h"
 
 enum Texts
 {
@@ -22,108 +34,101 @@ enum Spells
     SPELL_DARK_SHELL = 32358
 };
 
-enum Events
+enum Groups
 {
-    EVENT_VOID_BLAST = 1,
-    EVENT_DARK_SHELL
+    GROUP_VOID_BLAST = 1
 };
 
-
-class boss_pandemonius : public CreatureScript
+enum RoomAdds
 {
-public:
-    boss_pandemonius() : CreatureScript("boss_pandemonius") { }
+    NPC_SCAVENGER    = 18309,
+    NPC_CRYPT_RAIDER = 18311,
+    NPC_SORCERER     = 18313,
+};
 
-    CreatureAI* GetAI(Creature* creature) const
+float const ROOM_PULL_RANGE    = 70.0f;
+float const ROOM_ENTERANCE     = -50.0f;
+float const ROOM_EXIT          = -145.0f;
+
+constexpr uint8 MAX_VOID_BLAST = 5;
+
+struct boss_pandemonius : public BossAI
+{
+    boss_pandemonius(Creature* creature) : BossAI(creature, DATA_PANDEMONIUS)
     {
-        return new boss_pandemoniusAI(creature);
+        scheduler.SetValidator([this]
+            {
+                return !me->HasUnitState(UNIT_STATE_CASTING);
+            });
     }
 
-    struct boss_pandemoniusAI : public ScriptedAI
+    void JustEngagedWith(Unit* who) override
     {
-        boss_pandemoniusAI(Creature* creature) : ScriptedAI(creature) { }
+        Talk(SAY_AGGRO);
 
-        EventMap events;
-
-        void Reset()
-        {
-            events.Reset();
-            VoidBlastCounter = 0;
-        }
-
-        void EnterCombat(Unit*)
-        {
-            me->SetInCombatWithZone();
-
-            Talk(SAY_AGGRO);
-
-            events.ScheduleEvent(EVENT_DARK_SHELL, 20000);
-            events.ScheduleEvent(EVENT_VOID_BLAST, urand(8000, 23000));
-        }
-
-        void KilledUnit(Unit* victim)
-        {
-            if (victim->GetTypeId() == TYPEID_PLAYER)
-                Talk(SAY_KILL);
-        }
-
-        void JustDied(Unit* /*killer*/)
-        {
-            Talk(SAY_DEATH);
-        }
-
-        void UpdateAI(uint32 diff)
-        {
-            if (!UpdateVictim())
-                return;
-
-            events.Update(diff);
-            if (me->HasUnitState(UNIT_STATE_CASTING))
-                return;
-
-            switch (events.ExecuteEvent())
+        scheduler.
+            Schedule(20s, GROUP_VOID_BLAST, [this](TaskContext context)
             {
-                case EVENT_VOID_BLAST:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 100.0f, true))
-                    {
-                        DoCast(target, SPELL_VOID_BLAST);
-                        ++VoidBlastCounter;
-                    }
+                if (me->IsNonMeleeSpellCast(false))
+                {
+                    me->InterruptNonMeleeSpells(true);
+                }
 
-                    if (VoidBlastCounter == 5)
-                    {
-                        VoidBlastCounter = 0;
-                        events.RescheduleEvent(EVENT_VOID_BLAST, urand(15000, 25000));
-                    }
-                    else
-                    {
-                        events.RescheduleEvent(EVENT_VOID_BLAST, 500);
-                        events.DelayEvents(EVENT_DARK_SHELL, 500);
-                    }
-                    break;
-                case EVENT_DARK_SHELL:
-                    if (me->IsNonMeleeSpellCast(false))
-                    {
-                        me->InterruptNonMeleeSpells(true);
-                    }
+                Talk(EMOTE_DARK_SHELL);
+                DoCastSelf(SPELL_DARK_SHELL);
+                context.Repeat();
+            })
+            .Schedule(8s, 23s, [this](TaskContext context)
+            {
+                if (!(context.GetRepeatCounter() % (MAX_VOID_BLAST + 1)))
+                {
+                    context.Repeat(15s, 25s);
+                }
+                else
+                {
+                    DoCastRandomTarget(SPELL_VOID_BLAST);
+                    context.Repeat(500ms);
+                    context.DelayGroup(GROUP_VOID_BLAST, 500ms);
+                }
+            })
+            .Schedule(0s, [this](TaskContext)
+            {
+                PullRoom();
+            });
 
-                    Talk(EMOTE_DARK_SHELL);
-                    DoCast(me, SPELL_DARK_SHELL);
-                    events.RescheduleEvent(EVENT_DARK_SHELL, 20000);
-                    break;
-                default:
-                    break;
+        BossAI::JustEngagedWith(who);
+    }
+
+    void KilledUnit(Unit* victim) override
+    {
+        if (victim->IsPlayer())
+            Talk(SAY_KILL);
+    }
+
+    void JustDied(Unit* killer) override
+    {
+        Talk(SAY_DEATH);
+        BossAI::JustDied(killer);
+    }
+
+    void PullRoom()
+    {
+        std::list<Creature*> creatureList;
+        GetCreatureListWithEntryInGrid(creatureList, me, NPC_SCAVENGER, ROOM_PULL_RANGE);
+        GetCreatureListWithEntryInGrid(creatureList, me, NPC_CRYPT_RAIDER, ROOM_PULL_RANGE);
+        GetCreatureListWithEntryInGrid(creatureList, me, NPC_SORCERER, ROOM_PULL_RANGE);
+        for (Creature* creature : creatureList)
+            {
+                if (creature && (creature->GetPositionY() < ROOM_ENTERANCE && creature->GetPositionY() > ROOM_EXIT))
+                {
+                    creature->SetInCombatWithZone();
+                }
             }
-
-            DoMeleeAttackIfReady();
-        }
-
-    private:
-        uint32 VoidBlastCounter;
-    };
+        creatureList.clear();
+    }
 };
 
 void AddSC_boss_pandemonius()
 {
-    new boss_pandemonius();
+    RegisterManaTombsCreatureAI(boss_pandemonius);
 }

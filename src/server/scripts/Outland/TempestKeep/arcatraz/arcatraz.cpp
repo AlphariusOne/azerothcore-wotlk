@@ -1,11 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
 #include "arcatraz.h"
-
+#include "CreatureScript.h"
+#include "Player.h"
+#include "ScriptedCreature.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
 
 enum MillhouseSays
 {
@@ -55,8 +70,7 @@ enum MillhouseEvents
 
     EVENT_MILL_CHECK_HEALTH     = 20,
     EVENT_MILL_PYROBLAST        = 21,
-    EVENT_MILL_BASE_SPELL       = 22,
-    EVENT_MILL_ICEBLOCK         = 23
+    EVENT_MILL_BASE_SPELL       = 22
 };
 
 class npc_millhouse_manastorm : public CreatureScript
@@ -69,53 +83,64 @@ public:
         npc_millhouse_manastormAI(Creature* creature) : ScriptedAI(creature)
         {
             instance = creature->GetInstanceScript();
+            _usedIceblock = false;
         }
 
         InstanceScript* instance;
         EventMap events;
         EventMap events2;
 
-        void InitializeAI()
+        void InitializeAI() override
         {
             ScriptedAI::InitializeAI();
 
             me->SetReactState(REACT_PASSIVE);
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+            me->SetImmuneToAll(true);
             events2.Reset();
             events2.ScheduleEvent(EVENT_TELEPORT_VISUAL, 0);
             events2.ScheduleEvent(EVENT_MILLHOUSE_INTRO1, 3000);
         }
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
+            _usedIceblock = false;
         }
 
-        void AttackStart(Unit* who)
+        void AttackStart(Unit* who) override
         {
             if (who && me->Attack(who, true))
                 me->GetMotionMaster()->MoveChase(who, 20.0f);
         }
 
-        void KilledUnit(Unit* /*who*/)
+        void KilledUnit(Unit* /*who*/) override
         {
             Talk(SAY_KILL);
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             Talk(SAY_DEATH);
         }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             events.ScheduleEvent(EVENT_MILL_CHECK_HEALTH, 1000);
             events.ScheduleEvent(EVENT_MILL_PYROBLAST, 30000);
             events.ScheduleEvent(EVENT_MILL_BASE_SPELL, 2000);
-            events.ScheduleEvent(EVENT_MILL_ICEBLOCK, 1000);
         }
 
-        void UpdateAI(uint32 diff)
+        void DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*type*/, SpellSchoolMask /*school*/) override
+        {
+            if (me->HealthBelowPctDamaged(50, damage) && !_usedIceblock)
+            {
+                _usedIceblock = true;
+                Talk(SAY_ICEBLOCK);
+                DoCastSelf(SPELL_ICEBLOCK, true);
+            }
+        }
+
+        void UpdateAI(uint32 diff) override
         {
             events2.Update(diff);
             switch (events2.ExecuteEvent())
@@ -162,7 +187,7 @@ public:
                 case EVENT_MILLHOUSE_INTRO9:
                     me->SetFacingTo(M_PI * 1.5f);
                     me->SetHomePosition(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), M_PI * 1.5f);
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+                    me->SetImmuneToAll(false);
                     me->SetReactState(REACT_AGGRESSIVE);
                     events2.ScheduleEvent(EVENT_SEARCH_FIGHT, 1000);
                     break;
@@ -172,7 +197,6 @@ public:
                             AttackStart(target);
                     events2.ScheduleEvent(EVENT_SEARCH_FIGHT, 1000);
                     break;
-
             }
 
             if (!UpdateVictim())
@@ -197,15 +221,6 @@ public:
                     me->CastSpell(me->GetVictim(), SPELL_PYROBLAST, false);
                     events.ScheduleEvent(EVENT_MILL_PYROBLAST, 30000);
                     break;
-                case EVENT_MILL_ICEBLOCK:
-                    if (me->GetDistance(me->GetVictim()) < 5.0f)
-                    {
-                        Talk(SAY_ICEBLOCK);
-                        me->CastSpell(me, SPELL_ICEBLOCK, true);
-                        break;
-                    }
-                    events.ScheduleEvent(EVENT_MILL_ICEBLOCK, 1000);
-                    break;
                 case EVENT_MILL_BASE_SPELL:
                     switch (RAND(SPELL_FIREBALL, SPELL_ARCANE_MISSILES, SPELL_FROSTBOLT))
                     {
@@ -225,16 +240,18 @@ public:
                             break;
                     }
                     break;
-
             }
 
             DoMeleeAttackIfReady();
         }
+
+        private:
+            bool _usedIceblock;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new npc_millhouse_manastormAI(creature);
+        return GetArcatrazAI<npc_millhouse_manastormAI>(creature);
     }
 };
 
@@ -321,56 +338,58 @@ public:
         {
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
         }
 
-        void SummonedCreatureDies(Creature* summon, Unit*)
+        void SummonedCreatureDies(Creature* summon, Unit*) override
         {
             if (summon->GetEntry() == NPC_HARBINGER_SKYRISS)
             {
-                Unit::Kill(me, me);
+                me->KillSelf();
                 me->setActive(false);
                 instance->SetBossState(DATA_WARDEN_MELLICHAR, DONE);
                 if (Creature* creature = summons.GetCreatureWithEntry(NPC_MILLHOUSE))
                 {
-                    instance->DoCastSpellOnPlayers(SPELL_QID10886);
+                    if (IsHeroic())
+                    {
+                        instance->DoCastSpellOnPlayers(SPELL_QID10886);
+                    }
                     creature->AI()->Talk(SAY_COMPLETE);
-                    creature->SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+                    creature->ReplaceAllNpcFlags(UNIT_NPC_FLAG_GOSSIP);
                 }
             }
         }
 
-        void MoveInLineOfSight(Unit*) { }
-        void AttackStart(Unit*) { }
-        void EnterCombat(Unit*) { }
+        void MoveInLineOfSight(Unit*) override { }
+        void AttackStart(Unit*) override { }
+        void JustEngagedWith(Unit*) override { }
 
-        void JustDied(Unit*)
+        void JustDied(Unit*) override
         {
             me->setActive(false);
         }
 
-        void Reset()
+        void Reset() override
         {
             _Reset();
             me->setActive(false);
-            me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
-            me->RemoveFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_DEAD);
-            me->RemoveFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH);
-            me->CastSpell((Unit*)NULL, SPELL_TARGET_OMEGA, false);
-            instance->HandleGameObject(instance->GetData64(DATA_WARDENS_SHIELD), true);
+            me->SetImmuneToAll(false);
+            me->RemoveDynamicFlag(UNIT_DYNFLAG_DEAD);
+            me->RemoveUnitFlag2(UNIT_FLAG2_FEIGN_DEATH);
+            me->CastSpell((Unit*)nullptr, SPELL_TARGET_OMEGA, false);
+            instance->HandleGameObject(instance->GetGuidData(DATA_WARDENS_SHIELD), true);
             instance->SetBossState(DATA_WARDEN_MELLICHAR, NOT_STARTED);
-
         }
 
-        void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask)
+        void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask) override
         {
-            if (attacker && IS_PLAYER_GUID(attacker->GetCharmerOrOwnerOrOwnGUID()) && damage > 0 && !me->isActiveObject())
+            if (attacker && attacker->GetCharmerOrOwnerOrOwnGUID().IsPlayer() && damage > 0 && !me->isActiveObject())
             {
                 me->setActive(true);
                 me->InterruptNonMeleeSpells(false);
-                me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+                me->SetImmuneToAll(true);
                 events.ScheduleEvent(EVENT_WARDEN_INTRO1, 1500);
                 events.ScheduleEvent(EVENT_WARDEN_CHECK_PLAYERS, 1000);
                 instance->SetBossState(DATA_WARDEN_MELLICHAR, IN_PROGRESS);
@@ -378,7 +397,7 @@ public:
             damage = 0;
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
             if (data == FAIL)
             {
@@ -402,7 +421,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
             switch (events.ExecuteEvent())
@@ -422,7 +441,7 @@ public:
                     events.ScheduleEvent(EVENT_WARDEN_INTRO2, 1400);
                     break;
                 case EVENT_WARDEN_INTRO2:
-                    instance->HandleGameObject(instance->GetData64(DATA_WARDENS_SHIELD), false);
+                    instance->HandleGameObject(instance->GetGuidData(DATA_WARDENS_SHIELD), false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO3, 20000);
                     break;
                 case EVENT_WARDEN_INTRO3:
@@ -431,7 +450,7 @@ public:
                     break;
                 case EVENT_WARDEN_INTRO4:
                     me->SetFacingTo(0.5f);
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_ALPHA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_ALPHA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO5, 2000);
                     break;
                 case EVENT_WARDEN_INTRO5:
@@ -440,7 +459,7 @@ public:
                     break;
                 case EVENT_WARDEN_INTRO6:
                     me->SetFacingTo(M_PI * 1.5f);
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_OMEGA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_OMEGA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO7, 5000);
                     break;
                 case EVENT_WARDEN_INTRO7:
@@ -454,7 +473,7 @@ public:
                     events.ScheduleEvent(EVENT_WARDEN_INTRO10, 4000);
                     break;
                 case EVENT_WARDEN_INTRO10:
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_BETA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_BETA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO11, 2000);
                     break;
                 case EVENT_WARDEN_INTRO11:
@@ -464,7 +483,7 @@ public:
                     break;
                 case EVENT_WARDEN_INTRO12:
                     me->SetFacingTo(M_PI * 1.5f);
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_OMEGA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_OMEGA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO13, 6000);
                     break;
                 case EVENT_WARDEN_INTRO13:
@@ -478,7 +497,7 @@ public:
                     events.ScheduleEvent(EVENT_WARDEN_INTRO15, 5000);
                     break;
                 case EVENT_WARDEN_INTRO15:
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_DELTA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_DELTA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO16, 2000);
                     break;
                 case EVENT_WARDEN_INTRO16:
@@ -487,7 +506,7 @@ public:
                     break;
                 case EVENT_WARDEN_INTRO17:
                     me->SetFacingTo(M_PI * 1.5f);
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_OMEGA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_OMEGA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO18, 6000);
                     break;
                 case EVENT_WARDEN_INTRO18:
@@ -501,7 +520,7 @@ public:
                     events.ScheduleEvent(EVENT_WARDEN_INTRO20, 4000);
                     break;
                 case EVENT_WARDEN_INTRO20:
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_GAMMA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_GAMMA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO21, 2000);
                     break;
                 case EVENT_WARDEN_INTRO21:
@@ -510,7 +529,7 @@ public:
                     break;
                 case EVENT_WARDEN_INTRO22:
                     me->SetFacingTo(M_PI * 1.5f);
-                    me->CastSpell((Unit*)NULL, SPELL_TARGET_OMEGA, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_TARGET_OMEGA, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO23, 6000);
                     break;
                 case EVENT_WARDEN_INTRO23:
@@ -526,7 +545,7 @@ public:
                 case EVENT_WARDEN_INTRO25:
                     if (Creature* cr = me->SummonCreature(NPC_HARBINGER_SKYRISS, 445.763f, -191.639f, 44.64f, 1.60f, TEMPSUMMON_MANUAL_DESPAWN))
                     {
-                        cr->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+                        cr->SetImmuneToAll(true);
                         cr->CastSpell(cr, SPELL_TELEPORT_VISUAL, true);
                     }
                     events.ScheduleEvent(EVENT_WARDEN_INTRO26, 1000);
@@ -541,19 +560,19 @@ public:
                     events.ScheduleEvent(EVENT_WARDEN_INTRO28, 5000);
                     break;
                 case EVENT_WARDEN_INTRO28:
-                    instance->HandleGameObject(instance->GetData64(DATA_WARDENS_SHIELD), true);
+                    instance->HandleGameObject(instance->GetGuidData(DATA_WARDENS_SHIELD), true);
                     if (Creature* creature = summons.GetCreatureWithEntry(NPC_HARBINGER_SKYRISS))
-                        creature->CastSpell((Unit*)NULL, SPELL_MIND_REND, false);
+                        creature->CastSpell((Unit*)nullptr, SPELL_MIND_REND, false);
                     events.ScheduleEvent(EVENT_WARDEN_INTRO29, 4000);
                     break;
 
                 case EVENT_WARDEN_INTRO29:
                     events.Reset();
-                    me->SetFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_DEAD);
-                    me->SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_FEIGN_DEATH);
+                    me->SetDynamicFlag(UNIT_DYNFLAG_DEAD);
+                    me->SetUnitFlag2(UNIT_FLAG2_FEIGN_DEATH);
                     if (Creature* creature = summons.GetCreatureWithEntry(NPC_HARBINGER_SKYRISS))
                     {
-                        creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+                        creature->SetImmuneToAll(false);
                         if (Player* player = SelectTargetFromPlayerList(50.0f))
                             AttackStart(player);
                     }
@@ -562,43 +581,37 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new npc_warden_mellicharAI(creature);
+        return GetArcatrazAI<npc_warden_mellicharAI>(creature);
     }
 };
 
-class spell_arcatraz_soul_steal : public SpellScriptLoader
+class spell_arcatraz_soul_steal_aura : public AuraScript
 {
-public:
-    spell_arcatraz_soul_steal() : SpellScriptLoader("spell_arcatraz_soul_steal") { }
+    PrepareAuraScript(spell_arcatraz_soul_steal_aura);
 
-    class spell_arcatraz_soul_steal_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_arcatraz_soul_steal_AuraScript)
+        return ValidateSpellInfo({ SPELL_SOUL_STEAL });
+    }
 
-        void HandleEffectApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (Unit* caster = GetCaster())
-                caster->CastSpell(caster, SPELL_SOUL_STEAL, true);
-        }
-
-        void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (Unit* caster = GetCaster())
-                caster->RemoveAurasDueToSpell(SPELL_SOUL_STEAL);
-        }
-
-        void Register()
-        {
-            OnEffectApply += AuraEffectApplyFn(spell_arcatraz_soul_steal_AuraScript::HandleEffectApply, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE, AURA_EFFECT_HANDLE_REAL);
-            OnEffectRemove += AuraEffectRemoveFn(spell_arcatraz_soul_steal_AuraScript::HandleEffectRemove, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void HandleEffectApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        return new spell_arcatraz_soul_steal_AuraScript();
+        if (Unit* caster = GetCaster())
+            caster->CastSpell(caster, SPELL_SOUL_STEAL, true);
+    }
+
+    void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Unit* caster = GetCaster())
+            caster->RemoveAurasDueToSpell(SPELL_SOUL_STEAL);
+    }
+
+    void Register() override
+    {
+        OnEffectApply += AuraEffectApplyFn(spell_arcatraz_soul_steal_aura::HandleEffectApply, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE, AURA_EFFECT_HANDLE_REAL);
+        OnEffectRemove += AuraEffectRemoveFn(spell_arcatraz_soul_steal_aura::HandleEffectRemove, EFFECT_0, SPELL_AURA_MOD_DAMAGE_PERCENT_DONE, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -607,5 +620,5 @@ void AddSC_arcatraz()
     new npc_millhouse_manastorm();
     new npc_warden_mellichar();
 
-    new spell_arcatraz_soul_steal();
+    RegisterSpellScript(spell_arcatraz_soul_steal_aura);
 }

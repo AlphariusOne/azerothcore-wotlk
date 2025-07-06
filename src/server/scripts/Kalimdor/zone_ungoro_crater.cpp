@@ -1,26 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Ungoro Crater
-SD%Complete: 100
-SDComment: Support for Quest: 4245, 4491
-SDCategory: Ungoro Crater
-EndScriptData */
-
-/* ContentData
-npc_a-me
-npc_ringo
-EndContentData */
-
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 #include "ScriptedFollowerAI.h"
-#include "Player.h"
 #include "SpellInfo.h"
 
 enum AmeData
@@ -45,7 +44,7 @@ class npc_ame : public CreatureScript
 public:
     npc_ame() : CreatureScript("npc_ame") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest)
+    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_CHASING_AME)
         {
@@ -53,12 +52,12 @@ public:
             creature->AI()->Talk(SAY_READY, player);
             creature->SetUInt32Value(UNIT_FIELD_BYTES_1, 0);
             // Change faction so mobs attack
-            creature->setFaction(113);
+            creature->SetFaction(FACTION_ESCORTEE_N_NEUTRAL_PASSIVE);
         }
         return true;
     }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_ameAI(creature);
     }
@@ -69,26 +68,32 @@ public:
 
         uint32 DemoralizingShoutTimer;
 
-        void WaypointReached(uint32 waypointId)
+        void WaypointReached(uint32 waypointId) override
         {
             if (Player* player = GetPlayerForEscort())
             {
                 switch (waypointId)
                 {
                     case 19:
-                        me->SummonCreature(ENTRY_STOMPER, -6391.69f, -1730.49f, -272.83f, 4.96f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000);
-                        Talk(SAY_AGGRO1, player);
+                        if (Creature* summoned = me->SummonCreature(ENTRY_STOMPER, -6391.69f, -1730.49f, -272.83f, 4.96f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000))
+                        {
+                            Talk(SAY_AGGRO1, summoned);
+                        }
                         break;
                     case 28:
                         Talk(SAY_SEARCH, player);
                         break;
                     case 38:
-                        me->SummonCreature(ENTRY_TARLORD, -6370.75f, -1382.84f, -270.51f, 6.06f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000);
-                        Talk(SAY_AGGRO2, player);
+                         if (Creature* summoned = me->SummonCreature(ENTRY_TARLORD, -6370.75f, -1382.84f, -270.51f, 6.06f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000))
+                         {
+                            Talk(SAY_AGGRO2, summoned);
+                         }
                         break;
                     case 49:
-                        me->SummonCreature(ENTRY_TARLORD1, -6324.44f, -1181.05f, -270.17f, 4.34f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000);
-                        Talk(SAY_AGGRO3, player);
+                        if (Creature* summoned = me->SummonCreature(ENTRY_TARLORD1, -6324.44f, -1181.05f, -270.17f, 4.34f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 25000))
+                        {
+                            Talk(SAY_AGGRO3, summoned);
+                        }
                         break;
                     case 55:
                         Talk(SAY_FINISH, player);
@@ -98,23 +103,23 @@ public:
             }
         }
 
-        void Reset()
+        void Reset() override
         {
             DemoralizingShoutTimer = 5000;
         }
 
-        void JustSummoned(Creature* summoned)
+        void JustSummoned(Creature* summoned) override
         {
             summoned->AI()->AttackStart(me);
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             if (Player* player = GetPlayerForEscort())
                 player->FailQuest(QUEST_CHASING_AME);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             npc_escortAI::UpdateAI(diff);
             if (!UpdateVictim())
@@ -153,8 +158,7 @@ enum Ringo
 
     SPELL_REVIVE_RINGO          = 15591,
     QUEST_A_LITTLE_HELP         = 4491,
-    NPC_SPRAGGLE                = 9997,
-    FACTION_ESCORTEE            = 113
+    NPC_SPRAGGLE                = 9997
 };
 
 class npc_ringo : public CreatureScript
@@ -162,21 +166,21 @@ class npc_ringo : public CreatureScript
 public:
     npc_ringo() : CreatureScript("npc_ringo") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, const Quest* quest)
+    bool OnQuestAccept(Player* player, Creature* creature, const Quest* quest) override
     {
         if (quest->GetQuestId() == QUEST_A_LITTLE_HELP)
         {
             if (npc_ringoAI* ringoAI = CAST_AI(npc_ringo::npc_ringoAI, creature->AI()))
             {
                 creature->SetStandState(UNIT_STAND_STATE_STAND);
-                ringoAI->StartFollow(player, FACTION_ESCORTEE, quest);
+                ringoAI->StartFollow(player, FACTION_ESCORTEE_N_NEUTRAL_PASSIVE, quest);
             }
         }
 
         return true;
     }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_ringoAI(creature);
     }
@@ -189,17 +193,17 @@ public:
         uint32 EndEventProgress;
         uint32 EndEventTimer;
 
-        uint64 SpraggleGUID;
+        ObjectGuid SpraggleGUID;
 
-        void Reset()
+        void Reset() override
         {
             FaintTimer = urand(30000, 60000);
             EndEventProgress = 0;
             EndEventTimer = 1000;
-            SpraggleGUID = 0;
+            SpraggleGUID.Clear();
         }
 
-        void MoveInLineOfSight(Unit* who)
+        void MoveInLineOfSight(Unit* who) override
 
         {
             FollowerAI::MoveInLineOfSight(who);
@@ -220,7 +224,7 @@ public:
             }
         }
 
-        void SpellHit(Unit* /*pCaster*/, const SpellInfo* pSpell)
+        void SpellHit(Unit* /*pCaster*/, SpellInfo const* pSpell) override
         {
             if (HasFollowState(STATE_FOLLOW_INPROGRESS | STATE_FOLLOW_PAUSED) && pSpell->Id == SPELL_REVIVE_RINGO)
                 ClearFaint();
@@ -251,7 +255,7 @@ public:
             SetFollowPaused(false);
         }
 
-        void UpdateFollowerAI(uint32 Diff)
+        void UpdateFollowerAI(uint32 Diff) override
         {
             if (!UpdateVictim())
             {

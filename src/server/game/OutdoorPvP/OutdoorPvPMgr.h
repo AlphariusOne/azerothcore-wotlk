@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef OUTDOOR_PVP_MGR_H_
@@ -28,7 +39,7 @@ class OutdoorPvPMgr
 {
 private:
     OutdoorPvPMgr();
-    ~OutdoorPvPMgr() {};
+    ~OutdoorPvPMgr() = default;
 
 public:
     static OutdoorPvPMgr* instance();
@@ -55,7 +66,7 @@ public:
     bool HandleCustomSpell(Player* player, uint32 spellId, GameObject* go);
 
     // handle custom go if registered
-    bool HandleOpenGo(Player* player, uint64 guid);
+    bool HandleOpenGo(Player* player, GameObject* go);
 
     ZoneScript* GetZoneScript(uint32 zoneId);
 
@@ -63,30 +74,26 @@ public:
 
     void Update(uint32 diff);
 
-    void HandleGossipOption(Player* player, uint64 guid, uint32 gossipid);
+    void HandleGossipOption(Player* player, Creature* creatured, uint32 gossipid);
 
     bool CanTalkTo(Player* player, Creature* creature, GossipMenuItems const& gso);
 
     void HandleDropFlag(Player* player, uint32 spellId);
 
-    // pussywizard: lock required because different functions affect m_players
-    ACE_Thread_Mutex _lock;
+    // pussywizard: lock required because different functions affect _players
+    std::mutex _lock;
 
 private:
-    typedef std::vector<OutdoorPvP*> OutdoorPvPSet;
-    typedef std::map<uint32 /* zoneid */, OutdoorPvP*> OutdoorPvPMap;
-    typedef std::map<OutdoorPvPTypes, OutdoorPvPData*> OutdoorPvPDataMap;
-
     // contains all initiated outdoor pvp events
     // used when initing / cleaning up
-    OutdoorPvPSet  m_OutdoorPvPSet;
+    std::vector<std::unique_ptr<OutdoorPvP>> m_OutdoorPvPSet;
 
     // maps the zone ids to an outdoor pvp event
     // used in player event handling
-    OutdoorPvPMap   m_OutdoorPvPMap;
+    std::map<uint32/*zoneid*/, OutdoorPvP*> m_OutdoorPvPMap;
 
     // Holds the outdoor PvP templates
-    OutdoorPvPDataMap m_OutdoorPvPDatas;
+    std::map<OutdoorPvPTypes, std::unique_ptr<OutdoorPvPData>> m_OutdoorPvPDatas;
 
     // update interval
     uint32 m_UpdateTimer;

@@ -1,8 +1,21 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "violet_hold.h"
 
@@ -10,19 +23,14 @@ enum eSpells
 {
     SPELL_BLOODLUST                             = 54516,
     SPELL_BREAK_BONDS                           = 59463,
-    SPELL_CHAIN_HEAL_N                          = 54481,
-    SPELL_CHAIN_HEAL_H                          = 59473,
-    SPELL_EARTH_SHIELD_N                        = 54479,
-    SPELL_EARTH_SHIELD_H                        = 59471,
+    SPELL_CHAIN_HEAL                            = 54481,
+    SPELL_EARTH_SHIELD                          = 54479,
     //SPELL_EARTH_SHIELD_TRIGGERED_N            = 54480,
     //SPELL_EARTH_SHIELD_TRIGGERED_H            = 59472,
     SPELL_EARTH_SHOCK                           = 54511,
     SPELL_LIGHTNING_BOLT                        = 53044,
     SPELL_STORMSTRIKE                           = 51876,
 };
-
-#define SPELL_CHAIN_HEAL                        DUNGEON_MODE(SPELL_CHAIN_HEAL_N, SPELL_CHAIN_HEAL_H)
-#define SPELL_EARTH_SHIELD                      DUNGEON_MODE(SPELL_EARTH_SHIELD_N, SPELL_EARTH_SHIELD_H)
 
 enum Yells
 {
@@ -33,7 +41,6 @@ enum Yells
     SAY_ADD_KILLED                              = 4,
     SAY_BOTH_ADDS_KILLED                        = 5
 };
-
 
 enum eEvents
 {
@@ -51,9 +58,9 @@ class boss_erekem : public CreatureScript
 public:
     boss_erekem() : CreatureScript("boss_erekem") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_erekemAI (pCreature);
+        return GetVioletHoldAI<boss_erekemAI>(pCreature);
     }
 
     struct boss_erekemAI : public ScriptedAI
@@ -66,35 +73,35 @@ public:
         InstanceScript* pInstance;
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
             DoZoneInCombat();
             Talk(SAY_AGGRO);
             DoCast(me, SPELL_EARTH_SHIELD);
             events.Reset();
-            events.RescheduleEvent(EVENT_SPELL_BLOODLUST, 15000);
-            events.RescheduleEvent(EVENT_SPELL_BREAK_BONDS, urand(9000, 14000));
-            events.RescheduleEvent(EVENT_SPELL_CHAIN_HEAL, 0);
-            events.RescheduleEvent(EVENT_SPELL_EARTH_SHIELD, 20000);
-            events.RescheduleEvent(EVENT_SPELL_EARTH_SHOCK, urand(2000, 8000));
-            events.RescheduleEvent(EVENT_SPELL_LIGHTNING_BOLT, urand(5000, 10000));
+            events.RescheduleEvent(EVENT_SPELL_BLOODLUST, 15s);
+            events.RescheduleEvent(EVENT_SPELL_BREAK_BONDS, 9s, 14s);
+            events.RescheduleEvent(EVENT_SPELL_CHAIN_HEAL, 0ms);
+            events.RescheduleEvent(EVENT_SPELL_EARTH_SHIELD, 20s);
+            events.RescheduleEvent(EVENT_SPELL_EARTH_SHOCK, 2s, 8s);
+            events.RescheduleEvent(EVENT_SPELL_LIGHTNING_BOLT, 5s, 10s);
             if (IsHeroic())
-                events.RescheduleEvent(EVENT_SPELL_STORMSTRIKE, 3000);
+                events.RescheduleEvent(EVENT_SPELL_STORMSTRIKE, 3s);
 
-            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_1_GUID)))
+            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_1_GUID)))
                 if (!c->IsInCombat())
                     c->AI()->AttackStart(who);
-            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_2_GUID)))
+            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_2_GUID)))
                 if (!c->IsInCombat())
                     c->AI()->AttackStart(who);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -104,55 +111,55 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
                 case EVENT_SPELL_BLOODLUST:
-                    me->CastSpell((Unit*)NULL, SPELL_BLOODLUST, false);
-                    events.RepeatEvent(urand(35000, 45000));
+                    me->CastSpell((Unit*)nullptr, SPELL_BLOODLUST, false);
+                    events.Repeat(35s, 45s);
                     break;
                 case EVENT_SPELL_BREAK_BONDS:
-                    me->CastSpell((Unit*)NULL, SPELL_BREAK_BONDS, false);
-                    events.RepeatEvent(urand(16000, 22000));
+                    me->CastSpell((Unit*)nullptr, SPELL_BREAK_BONDS, false);
+                    events.Repeat(16s, 22s);
                     break;
                 case EVENT_SPELL_CHAIN_HEAL:
-                    if (uint64 TargetGUID = GetChainHealTargetGUID())
+                    if (ObjectGuid TargetGUID = GetChainHealTargetGUID())
                         if (pInstance)
                         {
                             if (Creature* target = pInstance->instance->GetCreature(TargetGUID))
                                 me->CastSpell(target, SPELL_CHAIN_HEAL, false);
 
-                            Creature* pGuard1 = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_1_GUID));
-                            Creature* pGuard2 = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_2_GUID));
+                            Creature* pGuard1 = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_1_GUID));
+                            Creature* pGuard2 = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_2_GUID));
                             if ((pGuard1 && !pGuard1->IsAlive()) || (pGuard2 && !pGuard2->IsAlive()))
                             {
-                                events.RepeatEvent(urand(3000, 6000));
+                                events.Repeat(3s, 6s);
                                 break;
                             }
                         }
-                    events.RepeatEvent(urand(8000, 11000));
+                    events.Repeat(8s, 11s);
                     break;
                 case EVENT_SPELL_EARTH_SHIELD:
                     me->CastSpell(me, SPELL_EARTH_SHIELD, false);
-                    events.RepeatEvent(20000);
+                    events.Repeat(20s);
                     break;
                 case EVENT_SPELL_EARTH_SHOCK:
                     me->CastSpell(me->GetVictim(), SPELL_EARTH_SHOCK, false);
-                    events.RepeatEvent(urand(8000, 13000));
+                    events.Repeat(8s, 13s);
                     break;
                 case EVENT_SPELL_LIGHTNING_BOLT:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 35.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 35.0f, true))
                         me->CastSpell(target, SPELL_LIGHTNING_BOLT, false);
-                    events.RepeatEvent(urand(15000, 25000));
+                    events.Repeat(15s, 25s);
                     break;
                 case EVENT_SPELL_STORMSTRIKE:
                     {
-                        Creature* pGuard1 = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_1_GUID));
-                        Creature* pGuard2 = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_2_GUID));
+                        Creature* pGuard1 = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_1_GUID));
+                        Creature* pGuard2 = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_2_GUID));
                         if (pGuard1 && !pGuard1->IsAlive() && pGuard2 && !pGuard2->IsAlive()) // both dead
                             me->CastSpell(me->GetVictim(), SPELL_STORMSTRIKE, false);
-                        events.RepeatEvent(3000);
+                        events.Repeat(3s);
                     }
                     break;
             }
@@ -160,43 +167,43 @@ public:
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             Talk(SAY_DEATH);
             if (pInstance)
                 pInstance->SetData(DATA_BOSS_DIED, 0);
         }
 
-        void KilledUnit(Unit* victim)
+        void KilledUnit(Unit* victim) override
         {
             if (victim && victim->GetGUID() == me->GetGUID())
                 return;
             Talk(SAY_SLAY);
         }
 
-        void MoveInLineOfSight(Unit* /*who*/) {}
+        void MoveInLineOfSight(Unit* /*who*/) override {}
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason why) override
         {
-            ScriptedAI::EnterEvadeMode();
+            ScriptedAI::EnterEvadeMode(why);
             events.Reset();
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
             if (pInstance)
                 pInstance->SetData(DATA_FAILED, 1);
         }
 
-        uint64 GetChainHealTargetGUID()
+        ObjectGuid GetChainHealTargetGUID()
         {
             if (HealthBelowPct(85))
                 return me->GetGUID();
 
             if (pInstance)
             {
-                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_1_GUID)))
+                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_1_GUID)))
                     if (c->IsAlive() && !c->HealthAbovePct(75))
                         return c->GetGUID();
 
-                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUARD_2_GUID)))
+                if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUARD_2_GUID)))
                     if (c->IsAlive() && !c->HealthAbovePct(75))
                         return c->GetGUID();
             }
@@ -220,15 +227,14 @@ enum eGuardEvents
     EVENT_SPELL_STRIKE
 };
 
-
 class npc_erekem_guard : public CreatureScript
 {
 public:
     npc_erekem_guard() : CreatureScript("npc_erekem_guard") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new npc_erekem_guardAI (pCreature);
+        return GetVioletHoldAI<npc_erekem_guardAI>(pCreature);
     }
 
     struct npc_erekem_guardAI : public ScriptedAI
@@ -241,25 +247,25 @@ public:
         InstanceScript* pInstance;
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
             DoZoneInCombat();
             events.Reset();
-            events.RescheduleEvent(EVENT_SPELL_GUSHING_WOUND, urand(1000, 3000));
-            events.RescheduleEvent(EVENT_SPELL_HOWLING_SCREECH, urand(8000, 13000));
-            events.RescheduleEvent(EVENT_SPELL_STRIKE, urand(4000, 8000));
+            events.RescheduleEvent(EVENT_SPELL_GUSHING_WOUND, 1s, 3s);
+            events.RescheduleEvent(EVENT_SPELL_HOWLING_SCREECH, 8s, 13s);
+            events.RescheduleEvent(EVENT_SPELL_STRIKE, 4s, 8s);
 
-            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetData64(DATA_EREKEM_GUID)))
+            if (Creature* c = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_EREKEM_GUID)))
                 if (!c->IsInCombat())
                     c->AI()->AttackStart(who);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -269,28 +275,28 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
                 case EVENT_SPELL_GUSHING_WOUND:
                     me->CastSpell(me->GetVictim(), SPELL_GUSHING_WOUND, false);
-                    events.RepeatEvent(urand(7000, 12000));
+                    events.Repeat(7s, 12s);
                     break;
                 case EVENT_SPELL_HOWLING_SCREECH:
                     me->CastSpell(me->GetVictim(), SPELL_HOWLING_SCREECH, false);
-                    events.RepeatEvent(urand(8000, 13000));
+                    events.Repeat(8s, 13s);
                     break;
                 case EVENT_SPELL_STRIKE:
                     me->CastSpell(me->GetVictim(), SPELL_STRIKE, false);
-                    events.RepeatEvent(urand(4000, 8000));
+                    events.Repeat(4s, 8s);
                     break;
             }
 
             DoMeleeAttackIfReady();
         }
 
-        void MoveInLineOfSight(Unit* /*who*/) {}
+        void MoveInLineOfSight(Unit* /*who*/) override {}
     };
 };
 

@@ -1,26 +1,43 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `spell_linked_spell`
+--
+
 DROP TABLE IF EXISTS `spell_linked_spell`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `spell_linked_spell` 
-(
-  `spell_trigger` mediumint(8) NOT NULL,
-  `spell_effect` mediumint(8) NOT NULL DEFAULT '0',
-  `type` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `comment` text NOT NULL,
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `spell_linked_spell` (
+  `spell_trigger` int NOT NULL,
+  `spell_effect` int NOT NULL DEFAULT '0',
+  `type` tinyint unsigned NOT NULL DEFAULT '0',
+  `comment` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   UNIQUE KEY `trigger_effect_type` (`spell_trigger`,`spell_effect`,`type`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COMMENT='Spell System';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Spell System';
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `spell_linked_spell`
+--
 
 LOCK TABLES `spell_linked_spell` WRITE;
 /*!40000 ALTER TABLE `spell_linked_spell` DISABLE KEYS */;
-INSERT INTO `spell_linked_spell` VALUES 
-(-75731,-75055,0,'Instant Statue Pedestal'),
+INSERT INTO `spell_linked_spell` VALUES
+(-75731,-75055,0,'Instant Statue'),
+(-75731,-74890,0,'Instant Statue'),
 (-73077,-69188,0,'Rocket Pack - linked aura'),
 (-71563,-71564,0,'Nevermelting Ice Crystal - Remove working trigger'),
 (-71533,-70871,0,'Blood-Queen: Essence of the Blood Queen'),
@@ -92,9 +109,13 @@ INSERT INTO `spell_linked_spell` VALUES
 (-47308,-47150,0,'On Strip Detect Drakuru 02 fade - Remove Envision Drakuru'),
 (-47241,-50589,0,'Metamorphosis - Remove Immolation Aura'),
 (-47122,-47118,0,'On Strip Detect Drakuru fade - Remove Envision Drakuru'),
+(-46839,-46840,0,'Shattrath Flask of Blinding Light'),
+(-46837,-46838,0,'Shattrath Flask of Pure Death'),
 (-46637,46638,0,'Break Ice (Madrigosa barrier'),
 (-46637,47030,0,'Break Ice (Madrigosa barrier'),
+(-45964,-46333,0,''),
 (-45717,-45726,0,'Fog of Corruption - Charm'),
+(-45373,-45374,0,'Bloodberry Elixir'),
 (-43883,-43332,0,'Rental racing ram removed removes Exhausted'),
 (-43883,-43310,0,'Remove Ram level Neutral when Rental racing ram removed'),
 (-43883,-42994,0,'Rental racing ram removed removes Gallop'),
@@ -107,9 +128,22 @@ INSERT INTO `spell_linked_spell` VALUES
 (-42846,-36032,0,'Arcane Missiles Rank 13'),
 (-42843,-36032,0,'Arcane Missiles Rank 12'),
 (-42825,42868,0,'Cannon Prep Remove - Link Cannon Fire'),
+(-42201,42205,0,'Eternal Silence trigger Residue of Eternity on removal'),
+(-41611,-41604,0,'Shattrath Flask of Supreme Power'),
+(-41610,-41605,0,'Shattrath Flask of Mighty Restoration'),
+(-41609,-41607,0,'Shattrath Flask of Fortification'),
+(-41608,-41606,0,'Shattrath Flask of Relentless Assault'),
 (-40626,-40628,0,'Apexis Enlightenment speed remove'),
 (-40625,-40627,0,'Apexis Emanations speed remove'),
 (-40623,-40624,0,'Apexis Vibrations speed remove'),
+(-40576,-40763,0,'Unstable Flask of the Sorcerer'),
+(-40576,-40588,0,'Unstable Flask of the Sorcerer'),
+(-40575,-40587,0,'Unstable Flask of the Soldier'),
+(-40573,-40586,0,'Unstable Flask of the Physician'),
+(-40572,-40580,0,'Unstable Flask of the Beast'),
+(-40568,-40582,0,'Unstable Flask of the Elder'),
+(-40567,-40579,0,'Unstable Flask of the Bandit'),
+(-40567,-40577,0,'Unstable Flask of the Bandit'),
 (-39091,-39092,0,'Negative Charge'),
 (-39088,-29659,0,'Positive Charge'),
 (-38794,33686,0,'Murmur\'s Shockwave (Heroic)'),
@@ -131,7 +165,6 @@ INSERT INTO `spell_linked_spell` VALUES
 (-29865,55594,0,'Deathbloom'),
 (-29612,29650,0,'Incite Rage - Trigger Exhausted'),
 (-28273,28274,0,'Bloodthistle'),
-(-28169,28206,0,'Mutating Injection - Mutagen Explosion'),
 (-28169,28240,0,'Mutating Injection - Poison Cloud'),
 (-28084,-29660,0,'Negative Charge'),
 (-28059,-29659,0,'Positive Charge'),
@@ -142,7 +175,6 @@ INSERT INTO `spell_linked_spell` VALUES
 (-25345,-36032,0,'Arcane Missiles Rank 8'),
 (-24924,25023,0,'Hallow\'s End Candy'),
 (-24919,49867,0,'Nauseous Stun - trigger vomit'),
-(-24869,24870,0,'Bobbing Apple, Bread of the Dead, Winter Veil Cookie'),
 (-24832,24731,0,'Cannon Prep Remove - Link Cannon Fire'),
 (-24743,24731,0,'Cannon Prep Remove - Link Cannon Fire'),
 (-21178,-57339,0,'Bear Form (Passive2) - Tank Class Passive Threat Remove'),
@@ -160,6 +192,7 @@ INSERT INTO `spell_linked_spell` VALUES
 (-5144,-36032,0,'Arcane Missiles Rank 2'),
 (-5143,-36032,0,'Arcane Missiles Rank 1'),
 (781,56446,0,'Disengage'),
+(3204,8329,0,'Sapper Explode'),
 (5784,31725,0,'Summon felsteed'),
 (7376,57339,2,'Defensive Stance Passive - Tank Class Passive Threat'),
 (7744,72757,0,'Will of the Forsaken Cooldown Trigger (WOTF)'),
@@ -180,19 +213,24 @@ INSERT INTO `spell_linked_spell` VALUES
 (7946,-7943,1,'Evolving Ectoplasm (Black) - Remove Evolving Ectoplasm Red'),
 (7946,7743,2,'Evolving Ectoplasm (Black) - trigger Shadow Immunity'),
 (11511,11518,0,'Activate Bomb trigger'),
+(13278,13493,0,'Gnomish Death Ray'),
 (13819,31726,0,'Summon Warhorse'),
 (13927,59917,1,'Enchant Gloves - Riding Skill Speed add'),
 (15237,23455,0,'Holy Nova (rank1)'),
 (15430,23458,0,'Holy Nova (rank2)'),
 (15431,23459,0,'Holy Nova (rank3)'),
+(17500,17499,0,'Malown\'s Slam - trigger Surge of Strenght'),
 (17767,54501,2,'Consume Shadows - Rank 1'),
+(17770,29940,0,'Wolfshead Helm Energy'),
 (17850,54501,2,'Consume Shadows - Rank 2'),
 (17851,54501,2,'Consume Shadows - Rank 3'),
 (17852,54501,2,'Consume Shadows - Rank 4'),
 (17853,54501,2,'Consume Shadows - Rank 5'),
 (17854,54501,2,'Consume Shadows - Rank 6'),
 (19263,67801,2,'Deterrence'),
+(19512,-19502,1,'Apply Salve - Sickly Critter Aura removed'),
 (20066,-61840,1,'Repentance'),
+(20482,20483,1,'Firesworn Eruption Trigger - On Hit - Trigger Massive Eruption'),
 (20594,65116,0,'Stoneform'),
 (21178,57339,2,'Bear Form (Passive2) - Tank Class Passive Threat'),
 (22352,-22520,1,'Phase Lasher (Fire) - Remove Phase Lasher (Frost)'),
@@ -208,9 +246,12 @@ INSERT INTO `spell_linked_spell` VALUES
 (22520,-22353,1,'Phase Lasher (Frost) - Remove Phase Lasher (Nature)'),
 (22520,-22352,1,'Phase Lasher (Frost) - Remove Phase Lasher (Fire)'),
 (23161,31725,0,'Summon Nightmare'),
+(23192,24872,0,'Form Rhok\'delar and Lok\'delar at once '),
 (23214,31726,0,'Summon Charger'),
+(23414,-26889,2,'Nefarian Rogue class call - Vanish'),
+(23414,-1857,2,'Nefarian Rogue class call - Vanish'),
+(23414,-1856,2,'Nefarian Rogue class call - Vanish'),
 (24023,12021,1,'Charge (24023) will now trigger Fixate'),
-(24071,24020,1,'Axe Flurry will now throw axes at nearby players, stunning them'),
 (24707,24870,2,'Bobbing Apple'),
 (24714,24750,1,'Trick cast Trick'),
 (24743,24730,1,'Cannon Prep - Link Teleport'),
@@ -218,6 +259,7 @@ INSERT INTO `spell_linked_spell` VALUES
 (24832,24754,1,'Cannon Prep - Link Stun'),
 (24832,24831,1,'Cannon Prep - Link Teleport'),
 (25331,25329,0,'Holy Nova (rank7)'),
+(25654,6608,1,'Hive\'Zara Tail Lasher: On Tail Lash - Apply Dropped Weapon'),
 (25780,57340,2,'Righteous Fury - Tank Class Passive Threat'),
 (26022,61417,2,'Pursuit of Justice add'),
 (26023,61418,2,'Pursuit of Justice add'),
@@ -227,7 +269,6 @@ INSERT INTO `spell_linked_spell` VALUES
 (26304,44429,0,'Blue Firework Cluster - questcredit'),
 (26325,44429,0,'Green Firework Cluster - questcredit'),
 (26327,44429,0,'Red Firework Cluster - questcredit'),
-(26373,26448,0,'Lunar Festival Invitation - Teleport Moonglade'),
 (26393,26394,1,'Elune\'s Blessing'),
 (27272,54501,2,'Consume Shadows - Rank 7'),
 (27799,27803,0,'Holy Nova (rank4)'),
@@ -237,14 +278,16 @@ INSERT INTO `spell_linked_spell` VALUES
 (28084,-28059,1,'Negative Charge - Positive Charge'),
 (28273,-28274,0,'Bloodthistle'),
 (28732,-28798,1,'Widow\'s Embrace - Frenzy'),
+(28757,28758,0,'Stalker\'s Ally'),
 (29126,29099,1,'Flame of Darnassus'),
 (29135,29102,1,'Flame of Ironforge'),
 (29136,29130,1,'Flame of Orgrimmar'),
 (29137,29101,1,'Flame of Stormwind'),
 (29138,29132,1,'Flame of Thunder Bluff'),
 (29139,29133,1,'Flame of Undercity'),
-(30658,30571,1,'Magtheridon - Quake Trigger'),
+(29683,32214,0,'Spotlight 20% player buff'),
 (30843,41624,0,'Prince Enfeelble'),
+(31286,6608,1,'Lash: Cast \'Dropped Weapon\' (6608) on hit on the same target'),
 (31606,38776,1,'As the Crow Flies quest'),
 (32096,32172,2,'Thrallmar\'s Favor'),
 (32098,32172,2,'Honor Hold\'s Favor'),
@@ -258,6 +301,10 @@ INSERT INTO `spell_linked_spell` VALUES
 (33686,31705,0,'Murmur\'s Shockwave Jump'),
 (34767,31726,0,'Summon Charger - Blood Elf'),
 (34769,31726,0,'Summon Warhorse - Blood Elf'),
+(35475,51120,1,'Drums of War - Tinnitus'),
+(35476,51120,1,'Drums of Battle - Tinnitus'),
+(35477,51120,1,'Drums of Speed - Tinnitus'),
+(35478,51120,1,'Drums of War - Tinnitus'),
 (36574,36650,0,'Apply Phase Slip Vulnerability'),
 (36587,36573,1,'Vision Guide quest'),
 (37493,31261,2,'Feign Death'),
@@ -349,6 +396,7 @@ INSERT INTO `spell_linked_spell` VALUES
 (45923,45922,1,'Shadow Prison Add'),
 (45950,-45922,1,'Shadow Prison Remove'),
 (45958,45956,1,'Signal Alliance'),
+(45964,46333,0,''),
 (45980,46022,0,'Re-Cursive quest'),
 (46019,46021,1,'Trigger Spectral Realm'),
 (46228,-46247,0,'Black Hole Visual (Grown)'),
@@ -457,7 +505,6 @@ INSERT INTO `spell_linked_spell` VALUES
 (55502,55475,0,'Lifeblood (Rank 5)'),
 (55503,55475,0,'Lifeblood (Rank 6)'),
 (55814,55817,1,'Trigger Eck Residue for achievement'),
-(55818,55528,0,'Summon Earthen'),
 (56397,63934,1,'Arcane Barrage - Arcane Barrage'),
 (56418,-56422,0,'remove submerge on cast'),
 (56453,67544,0,'Lock and Load Marker'),
@@ -470,6 +517,7 @@ INSERT INTO `spell_linked_spell` VALUES
 (57387,57608,0,'Argent Cannon - Powering Up The Core'),
 (57399,59699,2,'Well Fed - Well Fed (DND)'),
 (57469,7448,1,'Spread Fire triggers Fire'),
+(57620,-57935,0,'Twilight Shift aura removes Twilight Torment'),
 (57635,57636,0,'Disengage'),
 (57787,-57745,1,'Remove See Quest Invisibility 1 When hit by quest chain end spell'),
 (57852,57931,1,'link fire on hit'),
@@ -517,6 +565,7 @@ INSERT INTO `spell_linked_spell` VALUES
 (65250,62169,1,'Worm Hole (Algalon)'),
 (65684,-65686,2,'Remove Light Essence 10M'),
 (65686,-65684,2,'Remove Dark Essence 10M'),
+(65917,66122,0,'Magic Rooster'),
 (65940,65941,0,'Trial of the Crusader: Shattering Throw'),
 (66010,25771,0,'Divine Shield - Forbearance'),
 (66235,66233,0,'Ardent Defender Visuals'),
@@ -583,13 +632,17 @@ INSERT INTO `spell_linked_spell` VALUES
 (71847,71874,0,'Toxic Wasteling Devour'),
 (73077,69188,2,'Rocket Pack - linked aura'),
 (73313,50772,0,'Crimson Deathcharger - Summon Unholy Mount Visual'),
-(74890,75055,1,'Instant Statue Pedestal');
+(74890,75055,0,'Instant Statue');
 /*!40000 ALTER TABLE `spell_linked_spell` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:34:39
 

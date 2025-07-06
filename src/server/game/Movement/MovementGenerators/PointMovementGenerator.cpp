@@ -1,26 +1,50 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "PointMovementGenerator.h"
-#include "Errors.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "World.h"
-#include "MoveSplineInit.h"
 #include "MoveSpline.h"
+#include "MoveSplineInit.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
+#include "World.h"
 
 //----- Point Movement Generator
 template<class T>
 void PointMovementGenerator<T>::DoInitialize(T* unit)
 {
+    if (unit->HasUnitState(UNIT_STATE_NOT_MOVE) || unit->IsMovementPreventedByCasting())
+    {
+        // the next line is to ensure that a new spline is created in DoUpdate() once the unit is no longer rooted/stunned
+        /// @todo: rename this flag to something more appropriate since it is set to true even without speed change now.
+        i_recalculateSpeed = true;
+        return;
+    }
+
     if (!unit->IsStopped())
         unit->StopMoving();
 
     unit->AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
+    if (id == EVENT_CHARGE || id == EVENT_CHARGE_PREPATH)
+    {
+        unit->AddUnitState(UNIT_STATE_CHARGING);
+    }
+
     i_recalculateSpeed = false;
     Movement::MoveSplineInit init(unit);
     if (m_precomputedPath.size() > 2) // pussywizard: for charge
@@ -40,7 +64,7 @@ void PointMovementGenerator<T>::DoInitialize(T* unit)
             if (G3D::fuzzyEq(unit->GetPositionX(), i_x) && G3D::fuzzyEq(unit->GetPositionY(), i_y))
             {
                 i_x += 0.2f * cos(unit->GetOrientation());
-                i_y += 0.2f * sin(unit->GetOrientation());
+                i_y += 0.2f * std::sin(unit->GetOrientation());
             }
 
             init.MoveTo(i_x, i_y, i_z, true);
@@ -52,7 +76,7 @@ void PointMovementGenerator<T>::DoInitialize(T* unit)
         if (G3D::fuzzyEq(unit->GetPositionX(), i_x) && G3D::fuzzyEq(unit->GetPositionY(), i_y))
         {
             i_x += 0.2f * cos(unit->GetOrientation());
-            i_y += 0.2f * sin(unit->GetOrientation());
+            i_y += 0.2f * std::sin(unit->GetOrientation());
         }
 
         init.MoveTo(i_x, i_y, i_z, true);
@@ -74,15 +98,25 @@ bool PointMovementGenerator<T>::DoUpdate(T* unit, uint32 /*diff*/)
     if (!unit)
         return false;
 
-    if (unit->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_STUNNED))
+    if (unit->IsMovementPreventedByCasting())
     {
-        unit->ClearUnitState(UNIT_STATE_ROAMING_MOVE);
+        unit->StopMoving();
+        return true;
+    }
+
+    if (unit->HasUnitState(UNIT_STATE_NOT_MOVE))
+    {
+        if (!unit->HasUnitState(UNIT_STATE_CHARGING))
+        {
+            unit->StopMoving();
+        }
+
         return true;
     }
 
     unit->AddUnitState(UNIT_STATE_ROAMING_MOVE);
 
-    if (i_recalculateSpeed && !unit->movespline->Finalized())
+    if (id != EVENT_CHARGE_PREPATH && i_recalculateSpeed && !unit->movespline->Finalized())
     {
         i_recalculateSpeed = false;
         Movement::MoveSplineInit init(unit);
@@ -123,6 +157,18 @@ template<class T>
 void PointMovementGenerator<T>::DoFinalize(T* unit)
 {
     unit->ClearUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
+    if (id == EVENT_CHARGE || id == EVENT_CHARGE_PREPATH)
+    {
+        unit->ClearUnitState(UNIT_STATE_CHARGING);
+
+        if (_chargeTargetGUID && _chargeTargetGUID == unit->GetTarget())
+        {
+            if (Unit* target = ObjectAccessor::GetUnit(*unit, _chargeTargetGUID))
+            {
+                unit->Attack(target, true);
+            }
+        }
+    }
 
     if (unit->movespline->Finalized())
         MovementInform(unit);
@@ -135,6 +181,10 @@ void PointMovementGenerator<T>::DoReset(T* unit)
         unit->StopMoving();
 
     unit->AddUnitState(UNIT_STATE_ROAMING | UNIT_STATE_ROAMING_MOVE);
+    if (id == EVENT_CHARGE || id == EVENT_CHARGE_PREPATH)
+    {
+        unit->AddUnitState(UNIT_STATE_CHARGING);
+    }
 }
 
 template<class T>
@@ -146,6 +196,14 @@ template <> void PointMovementGenerator<Creature>::MovementInform(Creature* unit
 {
     if (unit->AI())
         unit->AI()->MovementInform(POINT_MOTION_TYPE, id);
+
+    if (Unit* summoner = unit->GetCharmerOrOwner())
+    {
+        if (UnitAI* AI = summoner->GetAI())
+        {
+            AI->SummonMovementInform(unit, POINT_MOTION_TYPE, id);
+        }
+    }
 }
 
 template void PointMovementGenerator<Player>::DoInitialize(Player*);
@@ -172,10 +230,10 @@ bool EffectMovementGenerator::Update(Unit* unit, uint32)
 
 void EffectMovementGenerator::Finalize(Unit* unit)
 {
-    if (unit->GetTypeId() != TYPEID_UNIT)
+    if (!unit->IsCreature())
         return;
 
-    if (unit->GetTypeId() == TYPEID_UNIT && unit->HasUnitMovementFlag(MOVEMENTFLAG_FALLING) && unit->movespline->isFalling()) // pussywizard
+    if (unit->IsCreature() && unit->HasUnitMovementFlag(MOVEMENTFLAG_FALLING) && unit->movespline->isFalling()) // pussywizard
         unit->RemoveUnitMovementFlag(MOVEMENTFLAG_FALLING);
 
     // Need restore previous movement since we have no proper states system

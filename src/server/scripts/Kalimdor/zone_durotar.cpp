@@ -1,14 +1,26 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "Vehicle.h"
-#include "SpellScript.h"
+#include "CreatureScript.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "Vehicle.h"
 
 enum Texts
 {
@@ -87,11 +99,11 @@ public:
     {
         npc_tiger_matriarch_creditAI(Creature* creature) : ScriptedAI(creature)
         {
-            SetCombatMovement(false);
-            events.ScheduleEvent(EVENT_CHECK_SUMMON_AURA, 2000);
+            me->SetCombatMovement(false);
+            events.ScheduleEvent(EVENT_CHECK_SUMMON_AURA, 2s);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
 
@@ -106,7 +118,7 @@ public:
                         if (!(*itr)->IsSummon())
                             continue;
 
-                        if (Unit* summoner = (*itr)->ToTempSummon()->GetSummoner())
+                        if (Unit* summoner = (*itr)->ToTempSummon()->GetSummonerUnit())
                             if (!summoner->HasAura(SPELL_NO_SUMMON_AURA) && !summoner->HasAura(SPELL_SUMMON_ZENTABRA_TRIGGER)
                                     && !summoner->IsInCombat())
                             {
@@ -118,7 +130,7 @@ public:
                     }
                 }
 
-                events.ScheduleEvent(EVENT_CHECK_SUMMON_AURA, 5000);
+                events.ScheduleEvent(EVENT_CHECK_SUMMON_AURA, 5s);
             }
         }
 
@@ -126,7 +138,7 @@ public:
         EventMap events;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_tiger_matriarch_creditAI(creature);
     }
@@ -139,37 +151,39 @@ public:
 
     struct npc_tiger_matriarchAI : public ScriptedAI
     {
-        npc_tiger_matriarchAI(Creature* creature) : ScriptedAI(creature),
-            _tigerGuid(0)
+        npc_tiger_matriarchAI(Creature* creature) : ScriptedAI(creature)
         {
         }
 
-        void EnterCombat(Unit* /*target*/)
+        void JustEngagedWith(Unit* /*target*/) override
         {
             _events.Reset();
-            _events.ScheduleEvent(EVENT_POUNCE, 100);
-            _events.ScheduleEvent(EVENT_NOSUMMON, 50000);
+            _events.ScheduleEvent(EVENT_POUNCE, 100ms);
+            _events.ScheduleEvent(EVENT_NOSUMMON, 50s);
         }
 
-        void IsSummonedBy(Unit* summoner)
+        void IsSummonedBy(WorldObject* summoner) override
         {
-            if (summoner->GetTypeId() != TYPEID_PLAYER || !summoner->GetVehicle())
-                return;
-
-            _tigerGuid = summoner->GetVehicle()->GetBase()->GetGUID();
-            if (Unit* tiger = ObjectAccessor::GetUnit(*me, _tigerGuid))
+            if (Player* player = summoner->ToPlayer())
             {
-                me->AddThreat(tiger, 500000.0f);
-                DoCast(me, SPELL_FURIOUS_BITE);
+                if (Vehicle* vehicle = player->GetVehicle())
+                {
+                    _tigerGuid = vehicle->GetBase()->GetGUID();
+                    if (Unit* tiger = ObjectAccessor::GetUnit(*me, _tigerGuid))
+                    {
+                        me->AddThreat(tiger, 500000.0f);
+                        DoCast(me, SPELL_FURIOUS_BITE);
+                    }
+                }
             }
         }
 
-        void KilledUnit(Unit* victim)
+        void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_UNIT || !victim->IsSummon())
+            if (!victim->IsCreature() || !victim->IsSummon())
                 return;
 
-            if (Unit* vehSummoner = victim->ToTempSummon()->GetSummoner())
+            if (Unit* vehSummoner = victim->ToTempSummon()->GetSummonerUnit())
             {
                 vehSummoner->RemoveAurasDueToSpell(SPELL_NO_SUMMON_AURA);
                 vehSummoner->RemoveAurasDueToSpell(SPELL_DETECT_INVIS);
@@ -179,7 +193,7 @@ public:
             me->DespawnOrUnsummon();
         }
 
-        void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask)
+        void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask) override
         {
             if (!attacker || !attacker->IsSummon())
                 return;
@@ -187,8 +201,8 @@ public:
             if (HealthBelowPct(20))
             {
                 damage = 0;
-                me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-                if (Unit* vehSummoner = attacker->ToTempSummon()->GetSummoner())
+                me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                if (Unit* vehSummoner = attacker->ToTempSummon()->GetSummonerUnit())
                 {
                     vehSummoner->AddAura(SPELL_SUMMON_ZENTABRA_TRIGGER, vehSummoner);
                     vehSummoner->CastSpell(vehSummoner, SPELL_SUMMON_ZENTABRA, true);
@@ -203,7 +217,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -219,16 +233,16 @@ public:
                 {
                     case EVENT_POUNCE:
                         DoCastVictim(SPELL_POUNCE);
-                        _events.ScheduleEvent(EVENT_POUNCE, 30000);
+                        _events.ScheduleEvent(EVENT_POUNCE, 30s);
                         break;
                     case EVENT_NOSUMMON: // Reapply SPELL_NO_SUMMON_AURA
                         if (Unit* tiger = ObjectAccessor::GetUnit(*me, _tigerGuid))
                         {
                             if (tiger->IsSummon())
-                                if (Unit* vehSummoner = tiger->ToTempSummon()->GetSummoner())
+                                if (Unit* vehSummoner = tiger->ToTempSummon()->GetSummonerUnit())
                                     me->AddAura(SPELL_NO_SUMMON_AURA, vehSummoner);
                         }
-                        _events.ScheduleEvent(EVENT_NOSUMMON, 50000);
+                        _events.ScheduleEvent(EVENT_NOSUMMON, 50s);
                         break;
                     default:
                         break;
@@ -240,10 +254,10 @@ public:
 
     private:
         EventMap _events;
-        uint64 _tigerGuid;
+        ObjectGuid _tigerGuid;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_tiger_matriarchAI(creature);
     }
@@ -269,7 +283,7 @@ public:
         {
         }
 
-        void InitializeAI()
+        void InitializeAI() override
         {
             if (me->isDead() || !me->GetOwner())
                 return;
@@ -296,7 +310,7 @@ public:
                 me->GetMotionMaster()->MoveFollow(player, 5.0f, float(rand_norm() + 1.0f) * M_PI / 3.0f * 4.0f);
         }
 
-        void Reset()
+        void Reset() override
         {
             _complete = false;
             me->AddAura(SPELL_VOLUNTEER_AURA, me);
@@ -312,7 +326,7 @@ public:
             return _mountModel;
         }
 
-        void MovementInform(uint32 type, uint32 id)
+        void MovementInform(uint32 type, uint32 id) override
         {
             if (type != POINT_MOTION_TYPE)
                 return;
@@ -320,7 +334,7 @@ public:
                 me->DespawnOrUnsummon();
         }
 
-        void SpellHit(Unit* caster, SpellInfo const* spell)
+        void SpellHit(Unit* caster, SpellInfo const* spell) override
         {
             if (spell->Id == SPELL_AOE_TURNIN && caster->GetEntry() == NPC_URUZIN && !_complete)
             {
@@ -339,7 +353,7 @@ public:
         bool _complete;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_troll_volunteerAI(creature);
     }
@@ -347,96 +361,68 @@ public:
 
 typedef npc_troll_volunteer::npc_troll_volunteerAI VolunteerAI;
 
-class spell_mount_check : public SpellScriptLoader
+class spell_mount_check_aura : public AuraScript
 {
-public:
-    spell_mount_check() : SpellScriptLoader("spell_mount_check") { }
+    PrepareAuraScript(spell_mount_check_aura);
 
-    class spell_mount_check_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_mount_check_AuraScript)
+        return ValidateSpellInfo({ SPELL_MOUNTING_CHECK });
+    }
 
-        bool Validate(SpellInfo const* /*spellInfo*/)
-        {
-            if (!sSpellMgr->GetSpellInfo(SPELL_MOUNTING_CHECK))
-                return false;
-            return true;
-        }
-
-        void HandleEffectPeriodic(AuraEffect const* /*aurEff*/)
-        {
-            Unit* target = GetTarget();
-            Unit* owner = target->GetOwner();
-
-            if (!owner)
-                return;
-
-            if (owner->IsMounted() && !target->IsMounted())
-            {
-                if (VolunteerAI* volunteerAI = CAST_AI(VolunteerAI, target->GetAI()))
-                    target->Mount(volunteerAI->GetMountId());
-            }
-            else if (!owner->IsMounted() && target->IsMounted())
-                target->Dismount();
-
-            target->SetSpeed(MOVE_RUN, owner->GetSpeedRate(MOVE_RUN));
-            target->SetSpeed(MOVE_WALK, owner->GetSpeedRate(MOVE_WALK));
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_mount_check_AuraScript::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void HandleEffectPeriodic(AuraEffect const* /*aurEff*/)
     {
-        return new spell_mount_check_AuraScript();
+        Unit* target = GetTarget();
+        Unit* owner = target->GetOwner();
+
+        if (!owner)
+            return;
+
+        if (owner->IsMounted() && !target->IsMounted())
+        {
+            if (VolunteerAI* volunteerAI = CAST_AI(VolunteerAI, target->GetAI()))
+                target->Mount(volunteerAI->GetMountId());
+        }
+        else if (!owner->IsMounted() && target->IsMounted())
+            target->Dismount();
+
+        target->SetSpeed(MOVE_RUN, owner->GetSpeedRate(MOVE_RUN));
+        target->SetSpeed(MOVE_WALK, owner->GetSpeedRate(MOVE_WALK));
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_mount_check_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
-class spell_voljin_war_drums : public SpellScriptLoader
+class spell_voljin_war_drums : public SpellScript
 {
-public:
-    spell_voljin_war_drums() : SpellScriptLoader("spell_voljin_war_drums") { }
+    PrepareSpellScript(spell_voljin_war_drums);
 
-    class spell_voljin_war_drums_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_voljin_war_drums_SpellScript)
+        return ValidateSpellInfo({ SPELL_MOTIVATE_1, SPELL_MOTIVATE_2 });
+    }
 
-        bool Validate(SpellInfo const* /*spellInfo*/)
-        {
-            if (!sSpellMgr->GetSpellInfo(SPELL_MOTIVATE_1))
-                return false;
-            if (!sSpellMgr->GetSpellInfo(SPELL_MOTIVATE_2))
-                return false;
-            return true;
-        }
-
-        void HandleDummy(SpellEffIndex /*effIndex*/)
-        {
-            Unit* caster = GetCaster();
-            if (Unit* target = GetHitUnit())
-            {
-                uint32 motivate = 0;
-                if (target->GetEntry() == NPC_CITIZEN_1)
-                    motivate = SPELL_MOTIVATE_1;
-                else if (target->GetEntry() == NPC_CITIZEN_2)
-                    motivate = SPELL_MOTIVATE_2;
-                if (motivate)
-                    caster->CastSpell(target, motivate, false);
-            }
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_voljin_war_drums_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleDummy(SpellEffIndex /*effIndex*/)
     {
-        return new spell_voljin_war_drums_SpellScript();
+        Unit* caster = GetCaster();
+        if (Unit* target = GetHitUnit())
+        {
+            uint32 motivate = 0;
+            if (target->GetEntry() == NPC_CITIZEN_1)
+                motivate = SPELL_MOTIVATE_1;
+            else if (target->GetEntry() == NPC_CITIZEN_2)
+                motivate = SPELL_MOTIVATE_2;
+            if (motivate)
+                caster->CastSpell(target, motivate, false);
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_voljin_war_drums::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
@@ -452,41 +438,34 @@ enum VoodooSpells
 };
 
 // 17009
-class spell_voodoo : public SpellScriptLoader
+class spell_voodoo : public SpellScript
 {
-public:
-    spell_voodoo() : SpellScriptLoader("spell_voodoo") { }
+    PrepareSpellScript(spell_voodoo);
 
-    class spell_voodoo_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_voodoo_SpellScript)
+        return ValidateSpellInfo(
+            {
+                SPELL_BREW,
+                SPELL_GHOSTLY,
+                SPELL_HEX1,
+                SPELL_HEX2,
+                SPELL_HEX3,
+                SPELL_GROW,
+                SPELL_LAUNCH
+            });
+    }
 
-        bool Validate(SpellInfo const* /*spellInfo*/)
-        {
-            if (!sSpellMgr->GetSpellInfo(SPELL_BREW) || !sSpellMgr->GetSpellInfo(SPELL_GHOSTLY) ||
-                    !sSpellMgr->GetSpellInfo(SPELL_HEX1) || !sSpellMgr->GetSpellInfo(SPELL_HEX2) ||
-                    !sSpellMgr->GetSpellInfo(SPELL_HEX3) || !sSpellMgr->GetSpellInfo(SPELL_GROW) ||
-                    !sSpellMgr->GetSpellInfo(SPELL_LAUNCH))
-                return false;
-            return true;
-        }
-
-        void HandleDummy(SpellEffIndex /*effIndex*/)
-        {
-            uint32 spellid = RAND(SPELL_BREW, SPELL_GHOSTLY, RAND(SPELL_HEX1, SPELL_HEX2, SPELL_HEX3), SPELL_GROW, SPELL_LAUNCH);
-            if (Unit* target = GetHitUnit())
-                GetCaster()->CastSpell(target, spellid, false);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_voodoo_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleDummy(SpellEffIndex /*effIndex*/)
     {
-        return new spell_voodoo_SpellScript();
+        uint32 spellid = RAND(SPELL_BREW, SPELL_GHOSTLY, RAND(SPELL_HEX1, SPELL_HEX2, SPELL_HEX3), SPELL_GROW, SPELL_LAUNCH);
+        if (Unit* target = GetHitUnit())
+            GetCaster()->CastSpell(target, spellid, false);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_voodoo::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
@@ -495,7 +474,7 @@ void AddSC_durotar()
     new npc_tiger_matriarch_credit();
     new npc_tiger_matriarch();
     new npc_troll_volunteer();
-    new spell_mount_check();
-    new spell_voljin_war_drums();
-    new spell_voodoo();
+    RegisterSpellScript(spell_mount_check_aura);
+    RegisterSpellScript(spell_voljin_war_drums);
+    RegisterSpellScript(spell_voodoo);
 }

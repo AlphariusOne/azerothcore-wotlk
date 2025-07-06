@@ -1,12 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "vault_of_archavon.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "vault_of_archavon.h"
 
 enum Events
 {
@@ -46,7 +60,7 @@ public:
         EventMap events;
         uint32 rotateTimer;
 
-        void Reset()
+        void Reset() override
         {
             rotateTimer = 0;
             events.Reset();
@@ -64,7 +78,7 @@ public:
             }
         }
 
-        void AttackStart(Unit* who)
+        void AttackStart(Unit* who) override
         {
             if (me->HasAura(SPELL_STONED_AURA))
                 return;
@@ -72,28 +86,29 @@ public:
             ScriptedAI::AttackStart(who);
         }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
             me->CastSpell(me, SPELL_BURNING_FURY, true);
 
-            events.ScheduleEvent(EVENT_BURNING_BREATH, 10000);
-            events.ScheduleEvent(EVENT_METEOR_FISTS, 30000);
-            events.ScheduleEvent(EVENT_FLAME_CINDER, 20000);
+            events.ScheduleEvent(EVENT_BURNING_BREATH, 10s);
+            events.ScheduleEvent(EVENT_METEOR_FISTS, 30s);
+            events.ScheduleEvent(EVENT_FLAME_CINDER, 20s);
 
             if (pInstance)
                 pInstance->SetData(EVENT_KORALON, IN_PROGRESS);
         }
 
-        void JustDied(Unit* )
+        void JustDied(Unit* /*killer*/) override
         {
             if (pInstance)
                 pInstance->SetData(EVENT_KORALON, DONE);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (rotateTimer)
             {
+                me->SetUInt64Value(UNIT_FIELD_CHANNEL_OBJECT, 0);
                 rotateTimer += diff;
                 if (rotateTimer >= 3000)
                 {
@@ -126,15 +141,15 @@ public:
                 case EVENT_BURNING_BREATH:
                     rotateTimer = 1500;
                     me->CastSpell(me, SPELL_BURNING_BREATH, false);
-                    events.RepeatEvent(45000);
+                    events.Repeat(45s);
                     break;
                 case EVENT_METEOR_FISTS:
                     me->CastSpell(me, SPELL_METEOR_FISTS, true);
-                    events.RepeatEvent(45000);
+                    events.Repeat(45s);
                     break;
                 case EVENT_FLAME_CINDER:
                     me->CastSpell(me, SPELL_FLAMING_CINDER, true);
-                    events.RepeatEvent(30000);
+                    events.Repeat(30s);
                     break;
                 default:
                     break;
@@ -144,111 +159,79 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_koralonAI(creature);
+        return GetVaultOfArchavonAI<boss_koralonAI>(creature);
     }
 };
 
-class spell_voa_flaming_cinder : public SpellScriptLoader
+class spell_voa_flaming_cinder : public SpellScript
 {
-public:
-    spell_voa_flaming_cinder() : SpellScriptLoader("spell_voa_flaming_cinder") { }
+    PrepareSpellScript(spell_voa_flaming_cinder);
 
-    class spell_voa_flaming_cinder_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_voa_flaming_cinder_SpellScript);
+        return ValidateSpellInfo({ SPELL_FLAMING_CINDER_MISSILE });
+    }
 
-        void HandleDummy(SpellEffIndex /*effIndex*/)
-        {
-            if (Unit* target = GetHitUnit())
-                GetCaster()->CastSpell(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), SPELL_FLAMING_CINDER_MISSILE, true);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_voa_flaming_cinder_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleDummy(SpellEffIndex /*effIndex*/)
     {
-        return new spell_voa_flaming_cinder_SpellScript();
+        if (Unit* target = GetHitUnit())
+            GetCaster()->CastSpell(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), SPELL_FLAMING_CINDER_MISSILE, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_voa_flaming_cinder::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
-class spell_koralon_meteor_fists : public SpellScriptLoader
+class spell_koralon_meteor_fists_aura : public AuraScript
 {
-public:
-    spell_koralon_meteor_fists() : SpellScriptLoader("spell_koralon_meteor_fists") { }
+    PrepareAuraScript(spell_koralon_meteor_fists_aura);
 
-    class spell_koralon_meteor_fists_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_koralon_meteor_fists_AuraScript);
+        return ValidateSpellInfo({ SPELL_METEOR_FISTS_DAMAGE });
+    }
 
-        bool Validate(SpellInfo const* /*spellInfo*/)
-        {
-            if (!sSpellMgr->GetSpellInfo(SPELL_METEOR_FISTS_DAMAGE))
-                return false;
-            return true;
-        }
-
-        void TriggerFists(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
-        {
-            PreventDefaultAction();
-            GetTarget()->CastSpell(eventInfo.GetProcTarget(), SPELL_METEOR_FISTS_DAMAGE, true, NULL, aurEff);
-        }
-
-        void Register()
-        {
-            OnEffectProc += AuraEffectProcFn(spell_koralon_meteor_fists_AuraScript::TriggerFists, EFFECT_0, SPELL_AURA_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void TriggerFists(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
     {
-        return new spell_koralon_meteor_fists_AuraScript();
+        PreventDefaultAction();
+        GetTarget()->CastSpell(eventInfo.GetProcTarget(), SPELL_METEOR_FISTS_DAMAGE, true, nullptr, aurEff);
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_koralon_meteor_fists_aura::TriggerFists, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
-class spell_flame_warder_meteor_fists : public SpellScriptLoader
+class spell_flame_warder_meteor_fists_aura : public AuraScript
 {
-public:
-    spell_flame_warder_meteor_fists() : SpellScriptLoader("spell_flame_warder_meteor_fists") { }
+    PrepareAuraScript(spell_flame_warder_meteor_fists_aura);
 
-    class spell_flame_warder_meteor_fists_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_flame_warder_meteor_fists_AuraScript);
+        return ValidateSpellInfo({ SPELL_FW_METEOR_FISTS_DAMAGE });
+    }
 
-        bool Validate(SpellInfo const* /*spellInfo*/)
-        {
-            if (!sSpellMgr->GetSpellInfo(SPELL_FW_METEOR_FISTS_DAMAGE))
-                return false;
-            return true;
-        }
-
-        void TriggerFists(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
-        {
-            PreventDefaultAction();
-            GetTarget()->CastSpell(eventInfo.GetProcTarget(), SPELL_FW_METEOR_FISTS_DAMAGE, true, NULL, aurEff);
-        }
-
-        void Register()
-        {
-            OnEffectProc += AuraEffectProcFn(spell_flame_warder_meteor_fists_AuraScript::TriggerFists, EFFECT_0, SPELL_AURA_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void TriggerFists(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
     {
-        return new spell_flame_warder_meteor_fists_AuraScript();
+        PreventDefaultAction();
+        GetTarget()->CastSpell(eventInfo.GetProcTarget(), SPELL_FW_METEOR_FISTS_DAMAGE, true, nullptr, aurEff);
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_flame_warder_meteor_fists_aura::TriggerFists, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
 void AddSC_boss_koralon()
 {
     new boss_koralon();
-    new spell_voa_flaming_cinder();
-    new spell_koralon_meteor_fists();
-    new spell_flame_warder_meteor_fists();
+    RegisterSpellScript(spell_voa_flaming_cinder);
+    RegisterSpellScript(spell_koralon_meteor_fists_aura);
+    RegisterSpellScript(spell_flame_warder_meteor_fists_aura);
 }

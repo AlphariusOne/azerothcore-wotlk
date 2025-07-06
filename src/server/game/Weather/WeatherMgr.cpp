@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 /** \file
@@ -9,13 +20,12 @@
 */
 
 #include "WeatherMgr.h"
-#include "Weather.h"
 #include "Log.h"
+#include "MiscPackets.h"
 #include "ObjectMgr.h"
 #include "Player.h"
-#include "WorldPacket.h"
+#include "Weather.h"
 #include "WorldSession.h"
-#include <memory>
 
 namespace WeatherMgr
 {
@@ -84,8 +94,8 @@ namespace WeatherMgr
 
         if (!result)
         {
-            sLog->outErrorDb(">> Loaded 0 weather definitions. DB table `game_weather` is empty.");
-            sLog->outString();
+            LOG_WARN("server.loading", ">> Loaded 0 weather definitions. DB table `game_weather` is empty.");
+            LOG_INFO("server.loading", " ");
             return;
         }
 
@@ -93,51 +103,48 @@ namespace WeatherMgr
         {
             Field* fields = result->Fetch();
 
-            uint32 zone_id = fields[0].GetUInt32();
+            uint32 zone_id = fields[0].Get<uint32>();
 
             WeatherData& wzc = mWeatherZoneMap[zone_id];
 
             for (uint8 season = 0; season < WEATHER_SEASONS; ++season)
             {
-                wzc.data[season].rainChance  = fields[season * (MAX_WEATHER_TYPE - 1) + 1].GetUInt8();
-                wzc.data[season].snowChance  = fields[season * (MAX_WEATHER_TYPE - 1) + 2].GetUInt8();
-                wzc.data[season].stormChance = fields[season * (MAX_WEATHER_TYPE - 1) + 3].GetUInt8();
+                wzc.data[season].rainChance  = fields[season * (MAX_WEATHER_TYPE - 1) + 1].Get<uint8>();
+                wzc.data[season].snowChance  = fields[season * (MAX_WEATHER_TYPE - 1) + 2].Get<uint8>();
+                wzc.data[season].stormChance = fields[season * (MAX_WEATHER_TYPE - 1) + 3].Get<uint8>();
 
                 if (wzc.data[season].rainChance > 100)
                 {
                     wzc.data[season].rainChance = 25;
-                    sLog->outErrorDb("Weather for zone %u season %u has wrong rain chance > 100%%", zone_id, season);
+                    LOG_ERROR("sql.sql", "Weather for zone {} season {} has wrong rain chance > 100%", zone_id, season);
                 }
 
                 if (wzc.data[season].snowChance > 100)
                 {
                     wzc.data[season].snowChance = 25;
-                    sLog->outErrorDb("Weather for zone %u season %u has wrong snow chance > 100%%", zone_id, season);
+                    LOG_ERROR("sql.sql", "Weather for zone {} season {} has wrong snow chance > 100%", zone_id, season);
                 }
 
                 if (wzc.data[season].stormChance > 100)
                 {
                     wzc.data[season].stormChance = 25;
-                    sLog->outErrorDb("Weather for zone %u season %u has wrong storm chance > 100%%", zone_id, season);
+                    LOG_ERROR("sql.sql", "Weather for zone {} season {} has wrong storm chance > 100%", zone_id, season);
                 }
             }
 
-            wzc.ScriptId = sObjectMgr->GetScriptId(fields[13].GetCString());
+            wzc.ScriptId = sObjectMgr->GetScriptId(fields[13].Get<std::string>());
 
             ++count;
         } while (result->NextRow());
 
-        sLog->outString(">> Loaded %u weather definitions in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
-        sLog->outString();
+        LOG_INFO("server.loading", ">> Loaded {} Weather Definitions in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+        LOG_INFO("server.loading", " ");
     }
 
     void SendFineWeatherUpdateToPlayer(Player* player)
     {
-        WorldPacket data(SMSG_WEATHER, (4 + 4 + 1));
-        data << (uint32)WEATHER_STATE_FINE;
-        data << (float)0.0f;
-        data << uint8(0);
-        player->GetSession()->SendPacket(&data);
+        WorldPackets::Misc::Weather weather(WEATHER_STATE_FINE);
+        player->SendDirectMessage(weather.Write());
     }
 
     void Update(uint32 diff)

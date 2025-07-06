@@ -1,12 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "blackrock_depths.h"
+#include <vector>
 
 enum Spells
 {
@@ -20,12 +32,10 @@ enum AmbassadorEvents
     AGGRO_TEXT              = 0,
     EVENT_SPELL_FIREBLAST   = 1,
     EVENT_SUMMON_SPIRITS    = 2,
-    EVENT_CHASE_AMBASSADOR  = 3,
-    EVENT_KILL_SPIRIT       = 4,
+    EVENT_KILL_SPIRIT       = 3
 };
 
 const uint32 NPC_FIRE_SPIRIT = 9178;
-const uint32 NPC_AMBASSADOR_FLAMELASHER = 9156;
 
 const Position SummonPositions[7] =
 {
@@ -38,16 +48,16 @@ const Position SummonPositions[7] =
     {1012.252747f, -206.696487f, -61.980618f, 3.617599f},
 };
 
-vector<int> gobjectDwarfRunesEntry { 170578, 170579, 170580, 170581, 170582, 170583, 170584 };
+std::vector<int> gobjectDwarfRunesEntry { 170578, 170579, 170580, 170581, 170582, 170583, 170584 };
 
 class boss_ambassador_flamelash : public CreatureScript
 {
 public:
     boss_ambassador_flamelash() : CreatureScript("boss_ambassador_flamelash") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_ambassador_flamelashAI>(creature);
+        return GetBlackrockDepthsAI<boss_ambassador_flamelashAI>(creature);
     }
 
     struct boss_ambassador_flamelashAI : public BossAI
@@ -60,7 +70,7 @@ public:
         SummonList summons;
 
         // This will allow to find a valid position to spawn them
-        vector<int> validPosition;
+        std::vector<int> validPosition;
         bool foundValidPosition = false;
 
         void JustSummoned(Creature* cr) override { summons.Summon(cr); }
@@ -70,7 +80,7 @@ public:
             switch (param)
             {
                 case EVENT_SUMMON_SPIRITS:
-                    _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, urand(12, 14)*IN_MILLISECONDS);
+                    _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, 12s, 14s);
                     break;
             }
         }
@@ -94,13 +104,13 @@ public:
                     dwarfRune->SetGoState(state);
         }
 
-        void EnterCombat(Unit* /*who*/) override
+        void JustEngagedWith(Unit* /*who*/) override
         {
-            _events.ScheduleEvent(EVENT_SPELL_FIREBLAST, 2 * IN_MILLISECONDS);
+            _events.ScheduleEvent(EVENT_SPELL_FIREBLAST, 2s);
 
             // Spawn 7 Embers initially
             for (int i = 0; i < 4; ++i)
-                _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, 4 * IN_MILLISECONDS);
+                _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, 4s);
 
             // Activate the runes (Start burning)
             TurnRunes(true);
@@ -172,9 +182,8 @@ public:
         void SummonSpirits()
         {
             // Make the Spirits chase Ambassador Flamelash
-            if (Creature* Spirit = me->SummonCreature(NPC_FIRE_SPIRIT, SummonPositions[getValidRandomPosition()], TEMPSUMMON_CORPSE_TIMED_DESPAWN, 60000))
-                Spirit->AI()->DoAction(EVENT_CHASE_AMBASSADOR);
-            _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, urand(12, 14) * IN_MILLISECONDS);
+            me->SummonCreature(NPC_FIRE_SPIRIT, SummonPositions[getValidRandomPosition()], TEMPSUMMON_CORPSE_TIMED_DESPAWN, 60 * IN_MILLISECONDS);
+            _events.ScheduleEvent(EVENT_SUMMON_SPIRITS, 12s, 14s);
         }
 
         void UpdateAI(uint32 diff) override
@@ -185,11 +194,11 @@ public:
 
             _events.Update(diff);
 
-            switch(_events.ExecuteEvent())
+            switch (_events.ExecuteEvent())
             {
                 case EVENT_SPELL_FIREBLAST:
                     DoCastVictim(SPELL_FIREBLAST);
-                    _events.ScheduleEvent(EVENT_SPELL_FIREBLAST, 7 * IN_MILLISECONDS);
+                    _events.ScheduleEvent(EVENT_SPELL_FIREBLAST, 7s);
                     break;
                 case EVENT_SUMMON_SPIRITS:
                     SummonSpirits();
@@ -206,67 +215,50 @@ class npc_burning_spirit : public CreatureScript
 public:
     npc_burning_spirit() : CreatureScript("npc_burning_spirit") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    struct npc_burning_spiritAI : public ScriptedAI
     {
-        return GetInstanceAI<npc_burning_spiritAI>(creature);
-    }
+        npc_burning_spiritAI(Creature* creature) : ScriptedAI(creature) {}
 
-    struct npc_burning_spiritAI : public CreatureAI
-    {
-        npc_burning_spiritAI(Creature* creature) : CreatureAI(creature) { }
-
-        EventMap _events;
-
-        void Reset() override
+        void IsSummonedBy(WorldObject* summoner) override
         {
-            // TODO: Swap this with an execute event
-            _events.ScheduleEvent(EVENT_CHASE_AMBASSADOR, 1);
+            if (!summoner->IsCreature())
+            {
+                return;
+            }
+
+            _flamelasherGUID = summoner->GetGUID();
+            me->GetMotionMaster()->MoveFollow(summoner->ToCreature(), 0.f, 0.f);
         }
 
-        void DoAction(int32 param) override
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
-            switch (param)
+            if (Creature* flamelasher = ObjectAccessor::GetCreature(*me, _flamelasherGUID))
             {
-                case EVENT_CHASE_AMBASSADOR:
-                    // TODO: Swap this with an execute event
-                    _events.ScheduleEvent(EVENT_CHASE_AMBASSADOR, 0.1f * IN_MILLISECONDS);
-                    break;
+                me->GetMotionMaster()->MoveFollow(flamelasher, 5.f, 0.f);
             }
         }
 
-        void UpdateAI(uint32 diff) override
+        void MovementInform(uint32 type, uint32 /*id*/) override
         {
-            _events.Update(diff);
+            if (type != FOLLOW_MOTION_TYPE)
+                return;
 
-            switch(_events.ExecuteEvent())
+            if (Creature* flamelasher = ObjectAccessor::GetCreature(*me, _flamelasherGUID))
             {
-                // Don't need to repeat this events because, once new spirits are summoned
-                // those new spirits will summon new spirits. If we repeated we would have
-                // an inmense number of spirits summoned if they were not all killed
-                case EVENT_CHASE_AMBASSADOR:
-                    if (!UpdateVictim())
-                    {
-                        if (Creature* boss = me->FindNearestCreature(NPC_AMBASSADOR_FLAMELASHER, 5000.0f, true))
-                        {
-                            if (me->GetDistance(boss->GetPosition()) <= 5.0f)
-                            {
-                                boss->CastSpell(boss, SPELL_BURNING_SPIRIT);
-                                boss->Kill(boss, me);
-                            }
-
-                            if (me->IsAlive())
-                                me->GetMotionMaster()->MoveChase(boss);
-                            _events.ScheduleEvent(EVENT_CHASE_AMBASSADOR, 0.5f * IN_MILLISECONDS);
-                        }
-                    }
-                    else
-                        _events.ScheduleEvent(EVENT_CHASE_AMBASSADOR, 0.5f * IN_MILLISECONDS);
-                    break;
+                flamelasher->CastSpell(flamelasher, SPELL_BURNING_SPIRIT);
+                Unit::Kill(flamelasher, me);
             }
-
-            DoMeleeAttackIfReady();
         }
+
+    private:
+        EventMap   _events;
+        ObjectGuid _flamelasherGUID;
     };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return GetBlackrockDepthsAI<npc_burning_spiritAI>(creature);
+    }
 };
 
 void AddSC_boss_ambassador_flamelash()

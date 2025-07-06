@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 /// \addtogroup u2w
@@ -11,12 +22,12 @@
 #ifndef _OPCODES_H
 #define _OPCODES_H
 
-#include "Common.h"
+#include "Define.h"
+#include <string>
 
 /// List of Opcodes
-enum Opcodes
+enum Opcodes : uint16
 {
-    MSG_NULL_ACTION                                 = 0x000,
     CMSG_BOOTME                                     = 0x001,
     CMSG_DBLOOKUP                                   = 0x002,
     SMSG_DBLOOKUP                                   = 0x003,
@@ -496,7 +507,7 @@ enum Opcodes
     SMSG_PONG                                       = 0x1DD,
     SMSG_CLEAR_COOLDOWN                             = 0x1DE,
     SMSG_GAMEOBJECT_PAGETEXT                        = 0x1DF,
-    CMSG_SETSHEATHED                                = 0x1E0,
+    CMSG_SET_SHEATHED                               = 0x1E0,
     SMSG_COOLDOWN_CHEAT                             = 0x1E1,
     SMSG_SPELL_DELAYED                              = 0x1E2,
     CMSG_QUEST_POI_QUERY                            = 0x1E3,
@@ -524,7 +535,7 @@ enum Opcodes
     CMSG_GM_SET_SECURITY_GROUP                      = 0x1F9,
     CMSG_GM_NUKE                                    = 0x1FA,
     MSG_RANDOM_ROLL                                 = 0x1FB,
-    SMSG_ENVIRONMENTALDAMAGELOG                     = 0x1FC,
+    SMSG_ENVIRONMENTAL_DAMAGE_LOG                   = 0x1FC,
     CMSG_CHANGEPLAYER_DIFFICULTY                    = 0x1FD,
     SMSG_RWHOIS                                     = 0x1FE,
     SMSG_LFG_PLAYER_REWARD                          = 0x1FF, // uint32, uint8, uint32, uint32, uint32, uint32, uint32, uint8, for (uint8) {uint32, uint32, uint32}
@@ -673,7 +684,7 @@ enum Opcodes
     CMSG_GROUP_RAID_CONVERT                         = 0x28E,
     CMSG_GROUP_ASSISTANT_LEADER                     = 0x28F,
     CMSG_BUYBACK_ITEM                               = 0x290,
-    SMSG_SERVER_MESSAGE                             = 0x291,
+    SMSG_CHAT_SERVER_MESSAGE                        = 0x291,
     CMSG_SET_SAVED_INSTANCE_EXTEND                  = 0x292,
     SMSG_LFG_OFFER_CONTINUE                         = 0x293,
     CMSG_TEST_DROP_RATE                             = 0x294,
@@ -1194,7 +1205,7 @@ enum Opcodes
     CMSG_FLOOD_GRACE_CHEAT                          = 0x497,
     SMSG_SERVER_FIRST_ACHIEVEMENT                   = 0x498,
     SMSG_PET_LEARNED_SPELL                          = 0x499,
-    SMSG_PET_REMOVED_SPELL                          = 0x49A,
+    SMSG_PET_UNLEARNED_SPELL                        = 0x49A,
     CMSG_CHANGE_SEATS_ON_CONTROLLED_VEHICLE         = 0x49B,
     CMSG_HEARTH_AND_RESURRECT                       = 0x49C,
     SMSG_ON_CANCEL_EXPECTED_RIDE_VEHICLE_AURA       = 0x49D,
@@ -1330,12 +1341,22 @@ enum Opcodes
     NUM_MSG_TYPES                                   = 0x51F
 };
 
+enum OpcodeMisc : uint16
+{
+    NUM_OPCODE_HANDLERS = NUM_MSG_TYPES,
+    NULL_OPCODE = 0x0000
+};
+
+typedef Opcodes OpcodeClient;
+typedef Opcodes OpcodeServer;
+
 /// Player state
 enum SessionStatus
 {
-    STATUS_AUTHED = 0,                                      // Player authenticated (_player == NULL, m_GUID has garbage)
-    STATUS_LOGGEDIN,                                        // Player in game (_player != NULL, m_GUID == _player->GetGUID(), inWorld())
-    STATUS_TRANSFER,                                        // Player transferring to another map (_player != NULL, m_GUID == _player->GetGUID(), !inWorld())
+    STATUS_AUTHED = 0,                                      // Player authenticated (_player == nullptr, m_playerRecentlyLogout = false or will be reset before handler call, m_GUID have garbage)
+    STATUS_LOGGEDIN,                                        // Player in game (_player != nullptr, m_GUID == _player->GetGUID(), inWorld())
+    STATUS_TRANSFER,                                        // Player transferring to another map (_player != nullptr, m_GUID == _player->GetGUID(), !inWorld())
+    STATUS_LOGGEDIN_OR_RECENTLY_LOGGOUT,                    // _player != nullptr or _player == nullptr && m_playerRecentlyLogout && m_playerLogout, m_GUID store last _player guid)
     STATUS_NEVER,                                           // Opcode not accepted from client (deprecated or server side only)
     STATUS_UNHANDLED,                                       // Opcode not handled yet
 };
@@ -1350,34 +1371,63 @@ enum PacketProcessing
 class WorldSession;
 class WorldPacket;
 
-#if defined(__GNUC__)
-#pragma pack(1)
-#else
-#pragma pack(push, 1)
-#endif
-
-struct OpcodeHandler
+class OpcodeHandler
 {
-    char const* name;
-    SessionStatus status;
-    PacketProcessing packetProcessing;
-    void (WorldSession::*handler)(WorldPacket& recvPacket);
+public:
+    OpcodeHandler(char const* name, SessionStatus status) : Name(name), Status(status) { }
+    virtual ~OpcodeHandler() = default;
+
+    char const* Name;
+    SessionStatus Status;
 };
 
-extern OpcodeHandler opcodeTable[NUM_MSG_TYPES];
+class ClientOpcodeHandler : public OpcodeHandler
+{
+public:
+    ClientOpcodeHandler(char const* name, SessionStatus status, PacketProcessing processing)
+        : OpcodeHandler(name, status), ProcessingPlace(processing) { }
 
-#if defined(__GNUC__)
-#pragma pack()
-#else
-#pragma pack(pop)
-#endif
+    virtual void Call(WorldSession* session, WorldPacket& packet) const = 0;
+
+    PacketProcessing ProcessingPlace;
+};
+
+class ServerOpcodeHandler : public OpcodeHandler
+{
+public:
+    ServerOpcodeHandler(char const* name, SessionStatus status)
+        : OpcodeHandler(name, status) { }
+};
+
+class OpcodeTable
+{
+public:
+    OpcodeTable();
+
+    OpcodeTable(OpcodeTable const&) = delete;
+    OpcodeTable& operator=(OpcodeTable const&) = delete;
+
+    ~OpcodeTable();
+
+    void Initialize();
+
+    ClientOpcodeHandler const* operator[](Opcodes index) const
+    {
+        return _internalTableClient[index];
+    }
+
+private:
+    template<typename Handler, Handler HandlerFunction>
+    void ValidateAndSetClientOpcode(OpcodeClient opcode, char const* name, SessionStatus status, PacketProcessing processing);
+
+    void ValidateAndSetServerOpcode(OpcodeServer opcode, char const* name, SessionStatus status);
+
+    ClientOpcodeHandler* _internalTableClient[NUM_OPCODE_HANDLERS];
+};
+
+extern OpcodeTable opcodeTable;
 
 /// Lookup opcode name for human understandable logging
-inline const char* LookupOpcodeName(uint16 id)
-{
-    if (id >= NUM_MSG_TYPES)
-        return "Received unknown opcode, it's more than max!";
-    return opcodeTable[id].name;
-}
+std::string GetOpcodeNameForLogging(Opcodes opcode);
+
 #endif
-/// @}

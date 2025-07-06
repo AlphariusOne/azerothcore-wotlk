@@ -1,15 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __UPDATEMASK_H
 #define __UPDATEMASK_H
 
-#include "UpdateFields.h"
-#include "Errors.h"
 #include "ByteBuffer.h"
+#include "Errors.h"
 
 class UpdateMask
 {
@@ -22,9 +32,9 @@ public:
         CLIENT_UPDATE_MASK_BITS = sizeof(ClientUpdateMaskType) * 8,
     };
 
-    UpdateMask() : _fieldCount(0), _blockCount(0), _bits(nullptr) { }
+    UpdateMask()  = default;
 
-    UpdateMask(UpdateMask const& right) : _bits(nullptr)
+    UpdateMask(UpdateMask const& right)
     {
         SetCount(right.GetCount());
         memcpy(_bits, right._bits, sizeof(uint8) * _blockCount * 32);
@@ -34,7 +44,7 @@ public:
 
     void SetBit(uint32 index) { _bits[index] = 1; }
     void UnsetBit(uint32 index) { _bits[index] = 0; }
-    bool GetBit(uint32 index) const { return _bits[index] != 0; }
+    [[nodiscard]] bool GetBit(uint32 index) const { return _bits[index] != 0; }
 
     void AppendToPacket(ByteBuffer* data)
     {
@@ -49,8 +59,8 @@ public:
         }
     }
 
-    uint32 GetBlockCount() const { return _blockCount; }
-    uint32 GetCount() const { return _fieldCount; }
+    [[nodiscard]] uint32 GetBlockCount() const { return _blockCount; }
+    [[nodiscard]] uint32 GetCount() const { return _fieldCount; }
 
     void SetCount(uint32 valuesCount)
     {
@@ -105,9 +115,9 @@ public:
     }
 
 private:
-    uint32 _fieldCount;
-    uint32 _blockCount;
-    uint8* _bits;
+    uint32 _fieldCount{0};
+    uint32 _blockCount{0};
+    uint8* _bits{nullptr};
 };
 
 #endif

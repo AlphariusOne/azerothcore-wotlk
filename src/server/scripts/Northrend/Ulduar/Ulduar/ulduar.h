@@ -1,14 +1,29 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_ULDUAR_H
 #define DEF_ULDUAR_H
 
-#include "Chat.h"
+#include "CreatureAIImpl.h"
 #include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
-#include "CellImpl.h"
+
+#define DataHeader "UU"
+
+#define UlduarScriptName "instance_ulduar"
 
 enum UlduarEncounters
 {
@@ -29,6 +44,8 @@ enum UlduarEncounters
     TYPE_YOGGSARON                          = 12,
     TYPE_ALGALON                            = 13,
     TYPE_WATCHERS                           = 14,
+    TYPE_HODIR_HM_FAIL                      = 15,
+    TYPE_WINTER_CACHE                       = 16
 };
 
 enum UlduarData
@@ -79,6 +96,11 @@ enum UlduarData
 
     // Tram
     DATA_CALL_TRAM                          = 710,
+
+    // Mage Barrier
+    DATA_MAGE_BARRIER                       = 800,
+    DATA_BRANN_MEMOTESAY                    = 801,
+    DATA_BRANN_EASY_MODE                    = 802,
 };
 
 enum UlduarNPCs
@@ -132,7 +154,7 @@ enum UlduarNPCs
     NPC_VEHICLE_CHOPPER                     = 33062,
     NPC_SALVAGED_DEMOLISHER                 = 33109,
     NPC_SALVAGED_DEMOLISHER_TURRET          = 33167,
-
+    NPC_BRANN_BASE_CAMP                     = 33579,
 
     // Algalon the Observer
     NPC_BRANN_BRONZBEARD_ALG                = 34064,
@@ -190,7 +212,15 @@ enum UlduarGameObjects
     GO_KOLOGARN_DOORS                       = 194553,
     GO_KEEPERS_GATE                         = 194255,
     GO_XT002_DOORS                          = 194631,
+
+    // Tram
     GO_MIMIRON_TRAM                         = 194675,
+    GO_MIMIRON_ACTIVATE_TRAM                = 194437,
+    GO_MIMIRON_CALL_TRAM_CENTER             = 194914,
+    GO_MIMIRON_CALL_TRAM_MIMIRON            = 194912,
+    GO_MIMIRON_TRAM_ROCKET_BOOSTER          = 194904,
+    GO_DOODAD_UL_TRAIN_TURNAROUND01         = 194915, // center
+    GO_DOODAD_UL_TRAIN_TURNAROUND02         = 194913, // mimiron
 
     // Mimiron, Hodir, Vezax
     GO_MIMIRON_ELEVATOR                     = 194749,
@@ -246,11 +276,6 @@ enum UlduarMisc
     ACTION_TOWER_OF_FLAMES_DESTROYED        = 3,
     ACTION_TOWER_OF_LIFE_DESTROYED          = 4,
 
-
-    // Algalon the Observer
-    WORLD_STATE_ALGALON_DESPAWN_TIMER       = 4131,
-    WORLD_STATE_ALGALON_TIMER_ENABLED       = 4132,
-
     EVENT_UPDATE_ALGALON_TIMER              = 1,
     ACTION_FEEDS_ON_TEARS_FAILED            = 0,
     ACTION_INIT_ALGALON                     = 1,
@@ -260,6 +285,18 @@ enum UlduarMisc
     TIMER_ALGALON_TO_SUMMON                 = 200,
     TIMER_ALGALON_SUMMONED                  = 100,
 
+    // Algalon the Observer, Freya, Hodir, Mimiron, Thorim, Gossip Keepers
+    SPELL_TELEPORT                          = 62940,
+
+    // Freya, Hodir, Mimiron, Thorim
+    EVENT_KEEPER_TELEPORTED                 = 62941,
+
+    // Ancient Gate
+    NPC_ANCIENT_GATE_WORLD_TRIGGER          = 22515,
+    EMOTE_ANCIENT_GATE_UNLOCKED             = 19,
+
+    // Yogg-Saron
+    ACTION_SARA_UPDATE_SUMMON_KEEPERS       = 4,
     KEEPER_FREYA                            = 0,
     KEEPER_HODIR                            = 1,
     KEEPER_MIMIRON                          = 2,
@@ -271,5 +308,13 @@ enum UlduarMisc
 
 Position const AlgalonSummonPos = {1632.531f, -304.8516f, 450.1123f, 1.530165f};
 Position const AlgalonLandPos   = {1632.668f, -302.7656f, 417.3211f, 1.530165f};
+
+template <class AI, class T>
+inline AI* GetUlduarAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, UlduarScriptName);
+}
+
+#define RegisterUlduarCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetUlduarAI)
 
 #endif

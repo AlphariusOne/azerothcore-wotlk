@@ -1,14 +1,24 @@
 /*
-Written by Xinef
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "EscortMovementGenerator.h"
-#include "Errors.h"
 #include "Creature.h"
 #include "CreatureAI.h"
-#include "World.h"
 #include "MoveSplineInit.h"
-#include "MoveSpline.h"
 #include "Player.h"
 
 template<class T>
@@ -22,7 +32,7 @@ void EscortMovementGenerator<T>::DoInitialize(T* unit)
     Movement::MoveSplineInit init(unit);
 
     if (m_precomputedPath.size() == 2) // xinef: simple case, just call move to
-        init.MoveTo(m_precomputedPath[1].x, m_precomputedPath[1].y, m_precomputedPath[1].z);
+        init.MoveTo(m_precomputedPath[1].x, m_precomputedPath[1].y, m_precomputedPath[1].z, true);
     else if (m_precomputedPath.size())
         init.MovebyPath(m_precomputedPath);
 
@@ -37,7 +47,7 @@ bool EscortMovementGenerator<T>::DoUpdate(T* unit, uint32  /*diff*/)
     if (!unit)
         return false;
 
-    if (unit->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_STUNNED))
+    if (unit->HasUnitState(UNIT_STATE_NOT_MOVE) || unit->IsMovementPreventedByCasting())
     {
         unit->ClearUnitState(UNIT_STATE_ROAMING_MOVE);
         return true;
@@ -66,7 +76,7 @@ bool EscortMovementGenerator<T>::DoUpdate(T* unit, uint32  /*diff*/)
             if (m_precomputedPath.size() > 2)
                 init.MovebyPath(m_precomputedPath);
             else if (m_precomputedPath.size() == 2)
-                init.MoveTo(m_precomputedPath[1].x, m_precomputedPath[1].y, m_precomputedPath[1].z);
+                init.MoveTo(m_precomputedPath[1].x, m_precomputedPath[1].y, m_precomputedPath[1].z, true);
         }
 
         init.Launch();

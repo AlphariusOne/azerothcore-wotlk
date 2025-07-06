@@ -1,26 +1,42 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `achievement_criteria_data`
+--
+
 DROP TABLE IF EXISTS `achievement_criteria_data`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `achievement_criteria_data` 
-(
-  `criteria_id` mediumint(8) NOT NULL,
-  `type` tinyint(3) unsigned NOT NULL DEFAULT '0',
-  `value1` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `value2` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `ScriptName` char(64) NOT NULL DEFAULT '',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `achievement_criteria_data` (
+  `criteria_id` int NOT NULL,
+  `type` tinyint unsigned NOT NULL DEFAULT '0',
+  `value1` int unsigned NOT NULL DEFAULT '0',
+  `value2` int unsigned NOT NULL DEFAULT '0',
+  `ScriptName` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   PRIMARY KEY (`criteria_id`,`type`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED COMMENT='Achievment system';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Achievment system';
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `achievement_criteria_data`
+--
 
 LOCK TABLES `achievement_criteria_data` WRITE;
 /*!40000 ALTER TABLE `achievement_criteria_data` DISABLE KEYS */;
-INSERT INTO `achievement_criteria_data` VALUES 
+INSERT INTO `achievement_criteria_data` VALUES
 (100,0,0,0,''),
 (102,0,0,0,''),
 (123,0,0,0,''),
@@ -169,13 +185,41 @@ INSERT INTO `achievement_criteria_data` VALUES
 (608,9,80,0,''),
 (609,9,80,0,''),
 (610,9,80,0,''),
-(611,17,0,0,''),
+(611,24,1600,0,''),
+(707,23,14,0,''),
+(708,23,13,0,''),
+(709,23,12,0,''),
+(710,23,11,0,''),
+(711,23,10,0,''),
+(712,23,9,0,''),
+(713,23,8,0,''),
+(714,23,7,0,''),
+(721,23,6,0,''),
+(722,23,5,0,''),
+(723,23,4,0,''),
+(724,23,3,0,''),
+(725,23,2,0,''),
+(726,23,1,0,''),
+(727,23,28,0,''),
+(728,23,27,0,''),
+(729,23,26,0,''),
+(730,23,25,0,''),
+(731,23,24,0,''),
+(732,23,23,0,''),
+(733,23,22,0,''),
+(734,23,21,0,''),
+(735,23,20,0,''),
+(736,23,19,0,''),
+(737,23,18,0,''),
+(738,23,17,0,''),
+(739,23,16,0,''),
+(740,23,15,0,''),
 (758,0,0,0,''),
 (1234,11,0,0,'achievement_bg_control_all_nodes'),
-(1235,17,1590,1590,''),
-(1236,17,0,0,''),
+(1235,24,1600,1590,''),
+(1236,24,3,0,''),
 (1237,0,0,0,''),
-(1238,17,0,0,''),
+(1238,24,1600,0,''),
 (1239,11,0,0,'achievement_bg_control_all_nodes'),
 (1240,0,0,0,''),
 (1241,0,0,0,''),
@@ -432,12 +476,10 @@ INSERT INTO `achievement_criteria_data` VALUES
 (3923,0,0,0,''),
 (3924,0,0,0,''),
 (3929,1,8403,0,''),
-(3929,5,70233,0,''),
-(3929,7,27571,0,''),
+(3929,11,0,0,'achievement_flirt_with_disaster_perf_check'),
 (3929,15,3,0,''),
 (3931,1,9099,0,''),
-(3931,5,70233,0,''),
-(3931,7,27571,0,''),
+(3931,11,0,0,'achievement_flirt_with_disaster_perf_check'),
 (3931,15,3,0,''),
 (3936,5,44827,0,''),
 (3937,5,44825,0,''),
@@ -450,7 +492,7 @@ INSERT INTO `achievement_criteria_data` VALUES
 (4112,5,55005,0,''),
 (4112,6,4395,0,''),
 (4227,1,8403,0,''),
-(4227,5,70233,0,''),
+(4227,11,0,0,'achievement_flirt_with_disaster_perf_check'),
 (4227,15,3,0,''),
 (4230,5,55000,0,''),
 (4230,16,141,0,''),
@@ -481,6 +523,25 @@ INSERT INTO `achievement_criteria_data` VALUES
 (4521,0,0,0,''),
 (4522,0,0,0,''),
 (4523,0,0,0,''),
+(4768,25,4,0,''),
+(4769,25,4,0,''),
+(4770,25,4,0,''),
+(4771,25,4,0,''),
+(4772,25,4,0,''),
+(4773,25,4,0,''),
+(4774,25,4,0,''),
+(4775,25,4,0,''),
+(4776,25,4,0,''),
+(4777,25,4,0,''),
+(4778,25,4,0,''),
+(4779,25,4,0,''),
+(4780,25,4,0,''),
+(4781,25,4,0,''),
+(4782,25,4,0,''),
+(4783,25,4,0,''),
+(4784,25,4,0,''),
+(4785,25,4,0,''),
+(4786,25,4,0,''),
 (4944,0,0,0,''),
 (4946,11,0,0,'achievement_killed_exp_or_honor_target'),
 (4948,8,1,0,''),
@@ -493,7 +554,7 @@ INSERT INTO `achievement_criteria_data` VALUES
 (4955,8,6,0,''),
 (4956,8,10,0,''),
 (4957,8,11,0,''),
-(4958,8,12,0,''),
+(4958,8,8,0,''),
 (4966,0,0,0,''),
 (4967,0,0,0,''),
 (4968,0,0,0,''),
@@ -780,6 +841,9 @@ INSERT INTO `achievement_criteria_data` VALUES
 (5897,0,0,0,''),
 (5898,0,0,0,''),
 (5899,0,0,0,''),
+(6140,25,4,0,''),
+(6141,25,5,0,''),
+(6142,25,4,0,''),
 (6225,1,5661,0,''),
 (6226,1,26044,0,''),
 (6228,1,739,0,''),
@@ -1160,8 +1224,8 @@ INSERT INTO `achievement_criteria_data` VALUES
 (7315,12,1,0,''),
 (7316,11,0,0,'achievement_chaos_theory'),
 (7316,12,1,0,''),
+(7317,11,0,0,'achievement_respect_your_elders'),
 (7317,12,1,0,''),
-(7317,18,0,0,''),
 (7318,11,0,0,'achievement_better_off_dred'),
 (7318,12,1,0,''),
 (7319,11,0,0,'achievement_less_rabi'),
@@ -1194,8 +1258,8 @@ INSERT INTO `achievement_criteria_data` VALUES
 (7332,18,0,0,''),
 (7333,12,1,0,''),
 (7333,18,0,0,''),
+(7359,11,0,0,'achievement_volunteer_work'),
 (7359,12,1,0,''),
-(7359,18,0,0,''),
 (7361,11,0,0,'achievement_oh_novos'),
 (7361,12,1,0,''),
 (7363,11,0,0,'achievement_snakes_whyd_it_have_to_be_snakes'),
@@ -2447,7 +2511,7 @@ INSERT INTO `achievement_criteria_data` VALUES
 (12828,12,1,0,''),
 (12846,0,0,0,''),
 (12859,1,9099,0,''),
-(12859,5,70233,0,''),
+(12859,11,0,0,'achievement_flirt_with_disaster_perf_check'),
 (12859,15,3,0,''),
 (12909,12,1,0,''),
 (12912,23,177,0,''),
@@ -2790,10 +2854,14 @@ INSERT INTO `achievement_criteria_data` VALUES
 (13468,12,2,0,'');
 /*!40000 ALTER TABLE `achievement_criteria_data` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:33:14
 

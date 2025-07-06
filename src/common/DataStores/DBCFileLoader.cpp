@@ -1,14 +1,23 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2020 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "DBCFileLoader.h"
 #include "Errors.h"
+#include <string.h>
 
 DBCFileLoader::DBCFileLoader() : recordSize(0), recordCount(0), fieldCount(0), stringSize(0), fieldsOffset(nullptr), data(nullptr), stringTable(nullptr) { }
 
@@ -23,7 +32,9 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
 
     FILE* f = fopen(filename, "rb");
     if (!f)
+    {
         return false;
+    }
 
     if (fread(&header, 4, 1, f) != 1)                        // Number of records
     {
@@ -78,9 +89,13 @@ bool DBCFileLoader::Load(char const* filename, char const* fmt)
     {
         fieldsOffset[i] = fieldsOffset[i - 1];
         if (fmt[i - 1] == 'b' || fmt[i - 1] == 'X')         // byte fields
+        {
             fieldsOffset[i] += sizeof(uint8);
+        }
         else                                                // 4 byte fields (int32/float/strings)
+        {
             fieldsOffset[i] += sizeof(uint32);
+        }
     }
 
     data = new unsigned char[recordSize * recordCount + stringSize];
@@ -104,7 +119,7 @@ DBCFileLoader::~DBCFileLoader()
     delete[] fieldsOffset;
 }
 
-DBCFileLoader::Record DBCFileLoader::getRecord(size_t id)
+DBCFileLoader::Record DBCFileLoader::getRecord(std::size_t id)
 {
     ASSERT(data);
     return Record(*this, data + id * recordSize);
@@ -151,7 +166,9 @@ uint32 DBCFileLoader::GetFormatRecordSize(char const* format, int32* index_pos)
     }
 
     if (index_pos)
+    {
         *index_pos = i;
+    }
 
     return recordsize;
 }
@@ -171,7 +188,9 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
 
     typedef char* ptr;
     if (strlen(format) != fieldCount)
+    {
         return nullptr;
+    }
 
     //get struct size and index pos
     int32 i;
@@ -185,7 +204,9 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
         {
             uint32 ind = getRecord(y).getUInt(i);
             if (ind > maxi)
+            {
                 maxi = ind;
+            }
         }
 
         ++maxi;
@@ -206,9 +227,13 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
     for (uint32 y = 0; y < recordCount; ++y)
     {
         if (i >= 0)
+        {
             indexTable[getRecord(y).getUInt(i)] = &dataTable[offset];
+        }
         else
+        {
             indexTable[y] = &dataTable[offset];
+        }
 
         for (uint32 x = 0; x < fieldCount; ++x)
         {
@@ -251,7 +276,9 @@ char* DBCFileLoader::AutoProduceData(char const* format, uint32& records, char**
 char* DBCFileLoader::AutoProduceStrings(char const* format, char* dataTable)
 {
     if (strlen(format) != fieldCount)
+    {
         return nullptr;
+    }
 
     char* stringPool = new char[stringSize];
     memcpy(stringPool, stringTable, stringSize);

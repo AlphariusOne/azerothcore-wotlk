@@ -1,27 +1,40 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
 #include "hellfire_ramparts.h"
 
-class instance_ramparts : public InstanceMapScript
+class instance_hellfire_ramparts : public InstanceMapScript
 {
 public:
-    instance_ramparts() : InstanceMapScript("instance_ramparts", 543) { }
+    instance_hellfire_ramparts() : InstanceMapScript("instance_hellfire_ramparts", MAP_HELLFIRE_CITADEL_RAMPARTS) { }
 
-    struct instance_ramparts_InstanceMapScript : public InstanceScript
+    struct instance_hellfire_ramparts_InstanceMapScript : public InstanceScript
     {
-        instance_ramparts_InstanceMapScript(Map* map) : InstanceScript(map) { }
+        instance_hellfire_ramparts_InstanceMapScript(Map* map) : InstanceScript(map) { }
 
-        void Initialize()
+        void Initialize() override
         {
+            SetHeaders(DataHeader);
             SetBossNumber(MAX_ENCOUNTERS);
-            felIronChestGUID = 0;
         }
 
-        void OnGameObjectCreate(GameObject* go)
+        void OnGameObjectCreate(GameObject* go) override
         {
             switch (go->GetEntry())
             {
@@ -32,58 +45,28 @@ public:
             }
         }
 
-        bool SetBossState(uint32 type, EncounterState state)
+        bool SetBossState(uint32 type, EncounterState state) override
         {
             if (!InstanceScript::SetBossState(type, state))
                 return false;
 
             if (type == DATA_VAZRUDEN && state == DONE)
                 if (GameObject* chest = instance->GetGameObject(felIronChestGUID))
-                    chest->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                    chest->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
             return true;
         }
 
-        std::string GetSaveData()
-        {
-            std::ostringstream saveStream;
-            saveStream << "H R " << GetBossSaveData();
-            return saveStream.str();
-        }
-
-        void Load(const char* strIn)
-        {
-            if (!strIn)
-                return;
-
-            char dataHead1, dataHead2;
-            std::istringstream loadStream(strIn);
-            loadStream >> dataHead1 >> dataHead2;
-
-            if (dataHead1 == 'H' && dataHead2 == 'R')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    uint32 tmpState;
-                    loadStream >> tmpState;
-                    if (tmpState == IN_PROGRESS || tmpState > SPECIAL)
-                        tmpState = NOT_STARTED;
-
-                    SetBossState(i, EncounterState(tmpState));
-                }
-            }
-        }
-
     protected:
-        uint64 felIronChestGUID;
+        ObjectGuid felIronChestGUID;
     };
 
-    InstanceScript* GetInstanceScript(InstanceMap* map) const
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
-        return new instance_ramparts_InstanceMapScript(map);
+        return new instance_hellfire_ramparts_InstanceMapScript(map);
     }
 };
 
-void AddSC_instance_ramparts()
+void AddSC_instance_hellfire_ramparts()
 {
-    new instance_ramparts();
+    new instance_hellfire_ramparts();
 }

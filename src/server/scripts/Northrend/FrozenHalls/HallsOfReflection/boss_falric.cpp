@@ -1,17 +1,31 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
+#include "CreatureScript.h"
 #include "halls_of_reflection.h"
+#include "ScriptedCreature.h"
 
 enum Yells
 {
-    SAY_AGGRO                                     = 50,
-    SAY_SLAY_1                                    = 51,
-    SAY_SLAY_2                                    = 52,
-    SAY_DEATH                                     = 53,
-    SAY_IMPENDING_DESPAIR                         = 54,
-    SAY_DEFILING_HORROR                           = 55,
+    SAY_AGGRO                                     = 0,
+    SAY_SLAY                                      = 1,
+    SAY_DEATH                                     = 2,
+    SAY_IMPENDING_DESPAIR                         = 3,
+    SAY_DEFILING_HORROR                           = 4,
 };
 
 enum Spells
@@ -49,27 +63,27 @@ public:
         uint8 uiHopelessnessCount;
         uint16 startFightTimer;
 
-        void Reset()
+        void Reset() override
         {
             startFightTimer = 0;
             uiHopelessnessCount = 0;
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+            me->SetImmuneToAll(true);
             me->SetControlled(false, UNIT_STATE_ROOT);
             events.Reset();
             if (pInstance)
                 pInstance->SetData(DATA_FALRIC, NOT_STARTED);
         }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
-            me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
+            me->SetImmuneToAll(false);
 
-            events.ScheduleEvent(EVENT_QUIVERING_STRIKE, 5000);
-            events.ScheduleEvent(EVENT_IMPENDING_DESPAIR, 11000);
-            events.ScheduleEvent(EVENT_DEFILING_HORROR, 20000);
+            events.ScheduleEvent(EVENT_QUIVERING_STRIKE, 5s);
+            events.ScheduleEvent(EVENT_IMPENDING_DESPAIR, 11s);
+            events.ScheduleEvent(EVENT_DEFILING_HORROR, 20s);
         }
 
-        void DoAction(int32 a)
+        void DoAction(int32 a) override
         {
             if (a == 1)
             {
@@ -78,7 +92,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (startFightTimer)
             {
@@ -103,7 +117,7 @@ public:
             {
                 case EVENT_QUIVERING_STRIKE:
                     me->CastSpell(me->GetVictim(), SPELL_QUIVERING_STRIKE, false);
-                    events.ScheduleEvent(EVENT_QUIVERING_STRIKE, 5000);
+                    events.ScheduleEvent(EVENT_QUIVERING_STRIKE, 5s);
                     break;
                 case EVENT_IMPENDING_DESPAIR:
                     if (Unit* target = SelectTargetFromPlayerList(45.0f, 0, true))
@@ -111,15 +125,15 @@ public:
                         Talk(SAY_IMPENDING_DESPAIR);
                         me->CastSpell(target, SPELL_IMPENDING_DESPAIR, false);
                     }
-                    events.ScheduleEvent(EVENT_IMPENDING_DESPAIR, 12000);
+                    events.ScheduleEvent(EVENT_IMPENDING_DESPAIR, 12s);
                     break;
                 case EVENT_DEFILING_HORROR:
                     Talk(SAY_DEFILING_HORROR);
-                    me->CastSpell((Unit*)NULL, SPELL_DEFILING_HORROR, false);
+                    me->CastSpell((Unit*)nullptr, SPELL_DEFILING_HORROR, false);
                     me->SetControlled(true, UNIT_STATE_ROOT);
                     events.DelayEventsToMax(5000, 0);
-                    events.ScheduleEvent(EVENT_UNROOT, 4000);
-                    events.ScheduleEvent(EVENT_DEFILING_HORROR, 20000);
+                    events.ScheduleEvent(EVENT_UNROOT, 4s);
+                    events.ScheduleEvent(EVENT_DEFILING_HORROR, 20s);
                     break;
                 case EVENT_UNROOT:
                     me->SetControlled(false, UNIT_STATE_ROOT);
@@ -130,7 +144,7 @@ public:
             {
                 if (uiHopelessnessCount)
                     me->RemoveOwnedAura(hopelessnessId[uiHopelessnessCount - 1][DUNGEON_MODE(0, 1)]);
-                me->CastSpell((Unit*)NULL, hopelessnessId[uiHopelessnessCount][DUNGEON_MODE(0, 1)], true);
+                me->CastSpell((Unit*)nullptr, hopelessnessId[uiHopelessnessCount][DUNGEON_MODE(0, 1)], true);
                 ++uiHopelessnessCount;
             }
 
@@ -138,31 +152,31 @@ public:
                 DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             Talk(SAY_DEATH);
             if (pInstance)
                 pInstance->SetData(DATA_FALRIC, DONE);
         }
 
-        void KilledUnit(Unit* who)
+        void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() == TYPEID_PLAYER)
-                Talk(RAND(SAY_SLAY_1, SAY_SLAY_2));
+            if (who->IsPlayer())
+                Talk(SAY_SLAY);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason why) override
         {
             me->SetControlled(false, UNIT_STATE_ROOT);
-            ScriptedAI::EnterEvadeMode();
+            ScriptedAI::EnterEvadeMode(why);
             if (startFightTimer)
                 Reset();
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_falricAI(creature);
+        return GetHallsOfReflectionAI<boss_falricAI>(creature);
     }
 };
 

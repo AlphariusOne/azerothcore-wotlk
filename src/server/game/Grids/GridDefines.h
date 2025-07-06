@@ -1,15 +1,27 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_GRIDDEFINES_H
 #define ACORE_GRIDDEFINES_H
 
 #include "Common.h"
-#include "NGrid.h"
-#include <cmath>
+#include "MapDefines.h"
+#include "GridCell.h"
+#include "MapGrid.h"
 
 // Forward class definitions
 class Corpse;
@@ -18,18 +30,14 @@ class DynamicObject;
 class GameObject;
 class Pet;
 class Player;
+class ObjectGuid;
 
-#define MAX_NUMBER_OF_CELLS     8
-
-#define MAX_NUMBER_OF_GRIDS      64
-
-#define SIZE_OF_GRIDS            533.3333f
-#define CENTER_GRID_ID           (MAX_NUMBER_OF_GRIDS/2)
+#define CENTER_GRID_ID          (MAX_NUMBER_OF_GRIDS/2)
 
 #define CENTER_GRID_OFFSET      (SIZE_OF_GRIDS/2)
 
 #define MIN_GRID_DELAY          (MINUTE*IN_MILLISECONDS)
-#define MIN_MAP_UPDATE_DELAY    10
+#define MIN_MAP_UPDATE_DELAY    1
 
 #define SIZE_OF_GRID_CELL       (SIZE_OF_GRIDS/MAX_NUMBER_OF_CELLS)
 
@@ -46,12 +54,13 @@ class Player;
 // Creature used instead pet to simplify *::Visit templates (not required duplicate code for Creature->Pet case)
 typedef TYPELIST_5(GameObject, Player, Creature/*pets*/, Corpse/*resurrectable*/, DynamicObject/*farsight target*/) AllWorldObjectTypes;
 typedef TYPELIST_4(GameObject, Creature/*except pets*/, DynamicObject, Corpse/*Bones*/) AllGridObjectTypes;
+typedef TYPELIST_5(Creature, GameObject, DynamicObject, Pet, Corpse) AllMapStoredObjectTypes;
 
-typedef GridRefManager<Corpse>          CorpseMapType;
-typedef GridRefManager<Creature>        CreatureMapType;
-typedef GridRefManager<DynamicObject>   DynamicObjectMapType;
-typedef GridRefManager<GameObject>      GameObjectMapType;
-typedef GridRefManager<Player>          PlayerMapType;
+typedef GridRefMgr<Corpse>          CorpseMapType;
+typedef GridRefMgr<Creature>        CreatureMapType;
+typedef GridRefMgr<DynamicObject>   DynamicObjectMapType;
+typedef GridRefMgr<GameObject>      GameObjectMapType;
+typedef GridRefMgr<Player>          PlayerMapType;
 
 enum GridMapTypeMask
 {
@@ -63,11 +72,12 @@ enum GridMapTypeMask
     GRID_MAP_TYPE_MASK_ALL              = 0x1F
 };
 
-typedef Grid<Player, AllWorldObjectTypes, AllGridObjectTypes> GridType;
-typedef NGrid<MAX_NUMBER_OF_CELLS, Player, AllWorldObjectTypes, AllGridObjectTypes> NGridType;
+typedef GridCell<AllWorldObjectTypes, AllGridObjectTypes> GridCellType;
+typedef MapGrid<AllWorldObjectTypes, AllGridObjectTypes> MapGridType;
 
 typedef TypeMapContainer<AllGridObjectTypes> GridTypeMapContainer;
 typedef TypeMapContainer<AllWorldObjectTypes> WorldTypeMapContainer;
+typedef TypeUnorderedMapContainer<AllMapStoredObjectTypes, ObjectGuid> MapStoredObjectTypesContainer;
 
 template<uint32 LIMIT>
 struct CoordPair
@@ -121,7 +131,7 @@ struct CoordPair
             y_coord = LIMIT - 1;
     }
 
-    bool IsCoordValid() const
+    [[nodiscard]] bool IsCoordValid() const
     {
         return x_coord < LIMIT && y_coord < LIMIT;
     }
@@ -133,7 +143,7 @@ struct CoordPair
         return *this;
     }
 
-    uint32 GetId() const
+    [[nodiscard]] uint32 GetId() const
     {
         return y_coord * LIMIT + x_coord;
     }
@@ -157,40 +167,32 @@ bool operator!=(const CoordPair<LIMIT>& p1, const CoordPair<LIMIT>& p2)
 typedef CoordPair<MAX_NUMBER_OF_GRIDS> GridCoord;
 typedef CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP> CellCoord;
 
-namespace acore
+namespace Acore
 {
     template<class RET_TYPE, int CENTER_VAL>
-    inline RET_TYPE Compute(float x, float y, float center_offset, float size)
+    inline RET_TYPE Compute(float x, float y, float size)
     {
-        // calculate and store temporary values in double format for having same result as same mySQL calculations
-        double x_offset = (double(x) - center_offset) / size;
-        double y_offset = (double(y) - center_offset) / size;
+        int gx = std::max<int>(0, (CENTER_VAL - x / size));
+        int gy = std::max<int>(0, (CENTER_VAL - y / size));
 
-        int x_val = int(x_offset + CENTER_VAL + 0.5f);
-        int y_val = int(y_offset + CENTER_VAL + 0.5f);
-        return RET_TYPE(x_val, y_val);
+        return RET_TYPE(gx, gy);
     }
 
     inline GridCoord ComputeGridCoord(float x, float y)
     {
-        return Compute<GridCoord, CENTER_GRID_ID>(x, y, CENTER_GRID_OFFSET, SIZE_OF_GRIDS);
+        return Compute<GridCoord, CENTER_GRID_ID>(x, y, SIZE_OF_GRIDS);
+    }
+
+    inline GridCoord ComputeGridCoordSimple(float x, float y)
+    {
+        int gx = (int)(CENTER_GRID_ID - x / SIZE_OF_GRIDS);
+        int gy = (int)(CENTER_GRID_ID - y / SIZE_OF_GRIDS);
+        return GridCoord((MAX_NUMBER_OF_GRIDS - 1) - gx, (MAX_NUMBER_OF_GRIDS - 1) - gy);
     }
 
     inline CellCoord ComputeCellCoord(float x, float y)
     {
-        return Compute<CellCoord, CENTER_GRID_CELL_ID>(x, y, CENTER_GRID_CELL_OFFSET, SIZE_OF_GRID_CELL);
-    }
-
-    inline CellCoord ComputeCellCoord(float x, float y, float& x_off, float& y_off)
-    {
-        double x_offset = (double(x) - CENTER_GRID_CELL_OFFSET) / SIZE_OF_GRID_CELL;
-        double y_offset = (double(y) - CENTER_GRID_CELL_OFFSET) / SIZE_OF_GRID_CELL;
-
-        int x_val = int(x_offset + CENTER_GRID_CELL_ID + 0.5f);
-        int y_val = int(y_offset + CENTER_GRID_CELL_ID + 0.5f);
-        x_off = (float(x_offset) - x_val + CENTER_GRID_CELL_ID) * SIZE_OF_GRID_CELL;
-        y_off = (float(y_offset) - y_val + CENTER_GRID_CELL_ID) * SIZE_OF_GRID_CELL;
-        return CellCoord(x_val, y_val);
+        return Compute<CellCoord, CENTER_GRID_CELL_ID>(x, y, SIZE_OF_GRID_CELL);
     }
 
     inline void NormalizeMapCoord(float& c)
@@ -203,7 +205,7 @@ namespace acore
 
     inline bool IsValidMapCoord(float c)
     {
-        return isfinite(c) && (std::fabs(c) <= MAP_HALFSIZE - 0.5f);
+        return std::isfinite(c) && (std::fabs(c) <= MAP_HALFSIZE - 0.5f);
     }
 
     inline bool IsValidMapCoord(float x, float y)
@@ -218,7 +220,7 @@ namespace acore
 
     inline bool IsValidMapCoord(float x, float y, float z, float o)
     {
-        return IsValidMapCoord(x, y, z) && isfinite(o);
+        return IsValidMapCoord(x, y, z) && std::isfinite(o);
     }
 }
 #endif

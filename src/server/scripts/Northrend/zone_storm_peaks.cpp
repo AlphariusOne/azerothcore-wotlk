@@ -1,22 +1,33 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "ScriptedGossip.h"
-#include "ScriptedEscortAI.h"
-#include "SpellScript.h"
-#include "SpellAuraEffects.h"
-#include "Vehicle.h"
+#include "AreaDefines.h"
 #include "CombatAI.h"
+#include "CreatureScript.h"
 #include "Player.h"
-#include "WorldSession.h"
-#include "WaypointManager.h"
+#include "ScriptedCreature.h"
+#include "ScriptedEscortAI.h"
+#include "ScriptedGossip.h"
+#include "SpellAuraEffects.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "Vehicle.h"
+#include "WaypointMgr.h"
 
-// Ours
 enum qSniffing
 {
     SPELL_SUMMON_PURSUERS_PERIODIC          = 54993,
@@ -32,32 +43,32 @@ public:
     {
         npc_frosthoundAI(Creature* creature) : npc_escortAI(creature) {}
 
-        void AttackStart(Unit* /*who*/) {}
-        void EnterCombat(Unit* /*who*/) {}
-        void EnterEvadeMode() {}
+        void AttackStart(Unit* /*who*/) override {}
+        void JustEngagedWith(Unit* /*who*/) override {}
+        void EnterEvadeMode(EvadeReason /* why */) override {}
 
-        void PassengerBoarded(Unit* who, int8 /*seatId*/, bool apply)
+        void PassengerBoarded(Unit* who, int8 /*seatId*/, bool apply) override
         {
-            if (who->GetTypeId() == TYPEID_PLAYER)
+            if (who->IsPlayer())
             {
                 if (apply)
                 {
-                    me->setFaction(who->getFaction());
+                    me->SetFaction(who->GetFaction());
                     me->CastSpell(me, SPELL_SUMMON_PURSUERS_PERIODIC, true);
                     Start(false, true, who->GetGUID());
                 }
             }
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
         }
 
-        void OnCharmed(bool /*apply*/)
+        void OnCharmed(bool /*apply*/) override
         {
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             npc_escortAI::UpdateAI(diff);
 
@@ -65,7 +76,7 @@ public:
                 return;
         }
 
-        void WaypointReached(uint32 waypointId)
+        void WaypointReached(uint32 waypointId) override
         {
             Player* player = GetPlayerForEscort();
             if (!player)
@@ -74,17 +85,17 @@ public:
             switch (waypointId)
             {
                 case 0:
-                    me->MonsterTextEmote("You've been seen! Use the net and Freezing elixir to keep the dwarves away!", 0, true);
+                    me->TextEmote("You've been seen! Use the net and Freezing elixir to keep the dwarves away!", nullptr, true);
                     break;
                 case 19:
-                    me->MonsterTextEmote("The frosthound has located the thief's hiding place. Confront him!", 0, true);
-                    if (Unit* summoner = me->ToTempSummon()->GetSummoner())
-                        summoner->ToPlayer()->KilledMonsterCredit(29677, 0);
+                    me->TextEmote("The frosthound has located the thief's hiding place. Confront him!", 0, true);
+                    if (Unit* summoner = me->ToTempSummon()->GetSummonerUnit())
+                        summoner->ToPlayer()->KilledMonsterCredit(29677);
                     break;
             }
         }
 
-        void JustSummoned(Creature* cr)
+        void JustSummoned(Creature* cr) override
         {
             cr->ToTempSummon()->SetTempSummonType(TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT);
             cr->ToTempSummon()->InitStats(20000);
@@ -95,7 +106,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_frosthoundAI(creature);
     }
@@ -122,7 +133,7 @@ public:
         uint32 hpTimer;
         bool charging;
 
-        void Reset()
+        void Reset() override
         {
             spellTimer = 0;
             hpTimer = 0;
@@ -130,13 +141,13 @@ public:
             me->SetControlled(false, UNIT_STATE_STUNNED);
         }
 
-        void MovementInform(uint32 type, uint32  /*pointId*/)
+        void MovementInform(uint32 type, uint32  /*pointId*/) override
         {
             if (type == POINT_MOTION_TYPE)
                 me->SetControlled(true, UNIT_STATE_STUNNED);
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* spellInfo)
+        void SpellHit(Unit* caster, SpellInfo const* spellInfo) override
         {
             if (spellInfo->Id == SPELL_STORM_HAMMER)
             {
@@ -145,14 +156,14 @@ public:
                 {
                     me->RemoveAllAurasExceptType(SPELL_AURA_MECHANIC_IMMUNITY);
                     Talk(1);
-                    caster->ToPlayer()->KilledMonsterCredit(me->GetEntry(), 0);
+                    caster->ToPlayer()->KilledMonsterCredit(me->GetEntry());
                     me->DespawnOrUnsummon(8000);
                     me->GetMotionMaster()->MoveJump(8721.94f, -1955, 963, 70.0f, 30.0f);
                 }
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (charging)
                 return;
@@ -185,7 +196,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_iron_watcherAI(creature);
     }
@@ -221,7 +232,7 @@ public:
         bool rollPath;
         bool setVisible;
 
-        void Reset()
+        void Reset() override
         {
             npc_escortAI::Reset();
             if (me->HasUnitState(UNIT_STATE_EVADE))
@@ -233,29 +244,29 @@ public:
         void RollPath()
         {
             me->SetEntry(NPC_TIME_LOST_PROTO_DRAKE);
-            Start(true, true, 0, 0, false, true, true);
+            Start(true, true, ObjectGuid::Empty, 0, false, true, true);
             SetNextWaypoint(urand(0, 250), true);
             me->UpdateEntry(roll_chance_i(25) ? NPC_TIME_LOST_PROTO_DRAKE : NPC_VYRAGOSA, 0, false);
         }
 
-        void WaypointReached(uint32  /*pointId*/) { }
+        void WaypointReached(uint32  /*pointId*/) override { }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             events.Reset();
             if (me->GetEntry() == NPC_TIME_LOST_PROTO_DRAKE)
             {
-                events.ScheduleEvent(SPELL_TIME_SHIFT, 10000);
-                events.ScheduleEvent(SPELL_TIME_LAPSE, 5000);
+                events.ScheduleEvent(SPELL_TIME_SHIFT, 10s);
+                events.ScheduleEvent(SPELL_TIME_LAPSE, 5s);
             }
             else
             {
-                events.ScheduleEvent(SPELL_FROST_BREATH, 8000);
-                events.ScheduleEvent(SPELL_FROST_CLEAVE, 5000);
+                events.ScheduleEvent(SPELL_FROST_BREATH, 8s);
+                events.ScheduleEvent(SPELL_FROST_CLEAVE, 5s);
             }
         }
 
-        void UpdateEscortAI(uint32 diff)
+        void UpdateEscortAI(uint32 diff) override
         {
             if (rollPath)
             {
@@ -279,19 +290,19 @@ public:
             {
                 case SPELL_TIME_SHIFT:
                     me->CastSpell(me, SPELL_TIME_SHIFT, false);
-                    events.RepeatEvent(18000);
+                    events.Repeat(18s);
                     break;
                 case SPELL_TIME_LAPSE:
                     me->CastSpell(me->GetVictim(), SPELL_TIME_LAPSE, false);
-                    events.RepeatEvent(12000);
+                    events.Repeat(12s);
                     break;
                 case SPELL_FROST_BREATH:
                     me->CastSpell(me->GetVictim(), SPELL_FROST_BREATH, false);
-                    events.RepeatEvent(12000);
+                    events.Repeat(12s);
                     break;
                 case SPELL_FROST_CLEAVE:
                     me->CastSpell(me->GetVictim(), SPELL_FROST_CLEAVE, false);
-                    events.RepeatEvent(8000);
+                    events.Repeat(8s);
                     break;
             }
 
@@ -299,7 +310,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_time_lost_proto_drakeAI(creature);
     }
@@ -329,7 +340,7 @@ public:
     {
         npc_wild_wyrmAI(Creature* creature) : ScriptedAI(creature) {}
 
-        uint64 playerGUID;
+        ObjectGuid playerGUID;
         uint32 checkTimer;
         uint32 announceAttackTimer;
         uint32 attackTimer;
@@ -337,14 +348,14 @@ public:
         bool switching;
         bool startPath;
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason why) override
         {
-            if (switching || me->HasAuraType(SPELL_AURA_CONTROL_VEHICLE))
+            if (switching || me->HasControlVehicleAura())
                 return;
-            ScriptedAI::EnterEvadeMode();
+            ScriptedAI::EnterEvadeMode(why);
         }
 
-        void Reset()
+        void Reset() override
         {
             me->SetRegeneratingHealth(true);
             me->SetSpeed(MOVE_RUN, 1.14f, true); // ZOMG!
@@ -352,19 +363,19 @@ public:
             switching = false;
             startPath = false;
             checkTimer = 0;
-            playerGUID = 0;
+            playerGUID.Clear();
             attackTimer = 0;
             announceAttackTimer = 0;
             me->AddUnitState(UNIT_STATE_NO_ENVIRONMENT_UPD);
         }
 
-        void PassengerBoarded(Unit*, int8, bool apply)
+        void PassengerBoarded(Unit*, int8, bool apply) override
         {
             if (!apply && me->IsAlive() && me->HasAura(SPELL_WYRM_GRIP))
                 me->RemoveAurasDueToSpell(SPELL_WYRM_GRIP);
         }
 
-        void MovementInform(uint32 type, uint32 pointId)
+        void MovementInform(uint32 type, uint32 pointId) override
         {
             if (type == POINT_MOTION_TYPE && pointId == 1 && !me->GetCharmerGUID())
             {
@@ -380,10 +391,10 @@ public:
             else if (type == ESCORT_MOTION_TYPE && me->movespline->Finalized())
                 startPath = true;
             else if (type == EFFECT_MOTION_TYPE && pointId == me->GetEntry())
-                Unit::Kill(me, me);
+                me->KillSelf();
         }
 
-        void DamageTaken(Unit* who, uint32& damage, DamageEffectType, SpellSchoolMask)
+        void DamageTaken(Unit* who, uint32& damage, DamageEffectType, SpellSchoolMask) override
         {
             if (who != me)
             {
@@ -393,16 +404,16 @@ public:
             }
         }
 
-        void AttackStart(Unit*) { }
-        void MoveInLineOfSight(Unit*  /*who*/) { }
+        void AttackStart(Unit*) override { }
+        void MoveInLineOfSight(Unit*  /*who*/) override { }
 
-        void OnCharmed(bool apply)
+        void OnCharmed(bool apply) override
         {
             if (apply)
                 setCharm = true;
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* spellInfo)
+        void SpellHit(Unit* caster, SpellInfo const* spellInfo) override
         {
             if (!playerGUID && spellInfo->Id == SPELL_SPEAR_OF_HODIR)
             {
@@ -430,7 +441,7 @@ public:
                 {
                     if (Player* player = GetValidPlayer())
                     {
-                        player->KilledMonsterCredit(30415, 0);
+                        player->KilledMonsterCredit(30415);
                         player->RemoveAurasDueToSpell(SPELL_JAWS_OF_DEATH);
                     }
                     me->SetStandState(UNIT_STAND_STATE_DEAD);
@@ -438,7 +449,6 @@ public:
                 }
                 else
                     Talk(2);
-
             }
         }
 
@@ -450,7 +460,7 @@ public:
             return nullptr;
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (startPath)
             {
@@ -473,7 +483,7 @@ public:
 
                 if (Player* charmer = GetValidPlayer())
                 {
-                    me->setFaction(16);
+                    me->SetFaction(FACTION_MONSTER_2);
                     charmer->SetClientControl(me, 0, true);
 
                     me->SetSpeed(MOVE_RUN, 2.0f, true);
@@ -482,7 +492,7 @@ public:
                 else
                 {
                     me->RemoveAllAuras();
-                    EnterEvadeMode();
+                    EnterEvadeMode(EVADE_REASON_OTHER);
                 }
                 return;
             }
@@ -511,7 +521,7 @@ public:
                         else
                         {
                             me->RemoveAllAuras();
-                            EnterEvadeMode();
+                            EnterEvadeMode(EVADE_REASON_OTHER);
                             return;
                         }
                     }
@@ -536,7 +546,7 @@ public:
                     if (!player)
                     {
                         me->RemoveAllAuras();
-                        EnterEvadeMode();
+                        EnterEvadeMode(EVADE_REASON_OTHER);
                     }
                 }
                 return;
@@ -563,61 +573,50 @@ public:
                     else
                     {
                         me->RemoveAllAuras();
-                        EnterEvadeMode();
+                        EnterEvadeMode(EVADE_REASON_OTHER);
                     }
                 }
             }
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_wild_wyrmAI(creature);
     }
 };
 
-class spell_q13003_thursting_hodirs_spear : public SpellScriptLoader
+class spell_q13003_thursting_hodirs_spear_aura : public AuraScript
 {
-public:
-    spell_q13003_thursting_hodirs_spear() : SpellScriptLoader("spell_q13003_thursting_hodirs_spear") { }
+    PrepareAuraScript(spell_q13003_thursting_hodirs_spear_aura);
 
-    class spell_q13003_thursting_hodirs_spear_AuraScript : public AuraScript
+    void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        PrepareAuraScript(spell_q13003_thursting_hodirs_spear_AuraScript);
+        ModStackAmount(60);
+    }
 
-        void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    void AfterRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Creature* creature = GetUnitOwner()->ToCreature())
         {
-            ModStackAmount(60);
-        }
-
-        void AfterRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (Creature* creature = GetUnitOwner()->ToCreature())
+            if (!creature->IsInEvadeMode())
             {
-                if (!creature->IsInEvadeMode())
-                {
-                    creature->RemoveAllAuras();
-                    creature->AI()->EnterEvadeMode();
-                }
+                creature->RemoveAllAuras();
+                creature->AI()->EnterEvadeMode();
             }
         }
+    }
 
-        void HandlePeriodic(AuraEffect const* /* aurEff */)
-        {
-            ModStackAmount(-1);
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_q13003_thursting_hodirs_spear_AuraScript::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-            OnEffectApply += AuraEffectApplyFn(spell_q13003_thursting_hodirs_spear_AuraScript::OnApply, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-            AfterEffectRemove += AuraEffectRemoveFn(spell_q13003_thursting_hodirs_spear_AuraScript::AfterRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void HandlePeriodic(AuraEffect const* /* aurEff */)
     {
-        return new spell_q13003_thursting_hodirs_spear_AuraScript();
+        ModStackAmount(-1);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_q13003_thursting_hodirs_spear_aura::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
+        OnEffectApply += AuraEffectApplyFn(spell_q13003_thursting_hodirs_spear_aura::OnApply, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_q13003_thursting_hodirs_spear_aura::AfterRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -629,63 +628,55 @@ enum q13007IronColossus
     SPELL_COLOSSUS_GROUND_SLAM      = 61673
 };
 
-class spell_q13007_iron_colossus : public SpellScriptLoader
+class spell_q13007_iron_colossus : public SpellScript
 {
-public:
-    spell_q13007_iron_colossus() : SpellScriptLoader("spell_q13007_iron_colossus") { }
+    PrepareSpellScript(spell_q13007_iron_colossus);
 
-    class spell_q13007_iron_colossus_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_q13007_iron_colossus_SpellScript);
+        return ValidateSpellInfo({ SPELL_JORMUNGAR_SUBMERGE_VISUAL, SPELL_COLOSSUS_GROUND_SLAM });
+    }
 
-        void HandleDummy(SpellEffIndex effIndex)
+    void HandleDummy(SpellEffIndex effIndex)
+    {
+        PreventHitDefaultEffect(effIndex);
+        Creature* caster = GetCaster()->ToCreature();
+        if (!caster)
+            return;
+
+        if (GetSpellInfo()->Id == SPELL_JORMUNGAR_SUBMERGE)
         {
-            PreventHitDefaultEffect(effIndex);
-            Creature* caster = GetCaster()->ToCreature();
-            if (!caster)
-                return;
+            caster->CastSpell(caster, SPELL_JORMUNGAR_SUBMERGE_VISUAL, true);
+            caster->ApplySpellImmune(SPELL_COLOSSUS_GROUND_SLAM, IMMUNITY_ID, SPELL_COLOSSUS_GROUND_SLAM, true);
+            caster->RemoveUnitFlag(UNIT_FLAG_DISABLE_MOVE);
+            caster->SetControlled(false, UNIT_STATE_ROOT);
+            for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+                caster->m_spells[i] = 0;
 
-            if (GetSpellInfo()->Id == SPELL_JORMUNGAR_SUBMERGE)
-            {
-                caster->CastSpell(caster, SPELL_JORMUNGAR_SUBMERGE_VISUAL, true);
-                caster->ApplySpellImmune(SPELL_COLOSSUS_GROUND_SLAM, IMMUNITY_ID, SPELL_COLOSSUS_GROUND_SLAM, true);
-                caster->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE);
-                caster->SetControlled(false, UNIT_STATE_ROOT);
-                for (uint8 i = 0; i < CREATURE_MAX_SPELLS; ++i)
-                    caster->m_spells[i] = 0;
+            caster->m_spells[0] = SPELL_JORMUNGAR_EMERGE;
+        }
+        else
+        {
+            caster->RemoveAurasDueToSpell(SPELL_JORMUNGAR_SUBMERGE_VISUAL);
+            caster->ApplySpellImmune(SPELL_COLOSSUS_GROUND_SLAM, IMMUNITY_ID, SPELL_COLOSSUS_GROUND_SLAM, false);
+            caster->SetUnitFlag(UNIT_FLAG_DISABLE_MOVE);
+            caster->SetControlled(true, UNIT_STATE_ROOT);
 
-                caster->m_spells[0] = SPELL_JORMUNGAR_EMERGE;
-            }
-            else
-            {
-                caster->RemoveAurasDueToSpell(SPELL_JORMUNGAR_SUBMERGE_VISUAL);
-                caster->ApplySpellImmune(SPELL_COLOSSUS_GROUND_SLAM, IMMUNITY_ID, SPELL_COLOSSUS_GROUND_SLAM, false);
-                caster->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE);
-                caster->SetControlled(true, UNIT_STATE_ROOT);
-
-                if (CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(caster->GetEntry()))
-                    for (uint8 i = 0; i < CREATURE_MAX_SPELLS; ++i)
-                        caster->m_spells[i] = ct->spells[i];
-            }
-
-            if (Player* player = caster->GetCharmerOrOwnerPlayerOrPlayerItself())
-                player->VehicleSpellInitialize();
+            if (CreatureTemplate const* ct = sObjectMgr->GetCreatureTemplate(caster->GetEntry()))
+                for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+                    caster->m_spells[i] = ct->spells[i];
         }
 
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_q13007_iron_colossus_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-        }
-    };
+        if (Player* player = caster->GetCharmerOrOwnerPlayerOrPlayerItself())
+            player->VehicleSpellInitialize();
+    }
 
-    SpellScript* GetSpellScript() const
+    void Register() override
     {
-        return new spell_q13007_iron_colossus_SpellScript();
-    };
+        OnEffectHitTarget += SpellEffectFn(spell_q13007_iron_colossus::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
 };
 
-
-// Theirs
 /*######
 ## npc_roxi_ramrocket
 ######*/
@@ -708,11 +699,11 @@ public:
             player->PrepareQuestMenu(creature->GetGUID());
 
         //Trainer Menu
-        if ( creature->IsTrainer() )
+        if (creature->IsTrainer())
             AddGossipItemFor(player, GOSSIP_ICON_TRAINER, GOSSIP_TEXT_TRAIN, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRAIN);
 
         //Vendor Menu
-        if ( creature->IsVendor() )
+        if (creature->IsVendor())
             if (player->HasSpell(SPELL_MECHANO_HOG) || player->HasSpell(SPELL_MEKGINEERS_CHOPPER))
                 AddGossipItemFor(player, GOSSIP_ICON_VENDOR, GOSSIP_TEXT_BROWSE_GOODS, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRADE);
 
@@ -760,18 +751,18 @@ public:
 
         bool freed;
 
-        void Reset()
+        void Reset() override
         {
             freed = false;
             me->CastSpell(me, SPELL_ICE_PRISON, true);
         }
 
-        void JustRespawned()
+        void JustRespawned() override
         {
             Reset();
         }
 
-        void UpdateAI(uint32 /*diff*/)
+        void UpdateAI(uint32 /*diff*/) override
         {
             if (!freed)
                 return;
@@ -780,7 +771,7 @@ public:
                 me->DespawnOrUnsummon();
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* spell)
+        void SpellHit(Unit* caster, SpellInfo const* spell) override
         {
             if (spell->Id != SPELL_ICE_LANCE)
                 return;
@@ -795,7 +786,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_brunnhildar_prisonerAI(creature);
     }
@@ -808,8 +799,6 @@ public:
 enum FreedProtoDrake
 {
     NPC_DRAKE                           = 29709,
-
-    AREA_VALLEY_OF_ANCIENT_WINTERS      = 4437,
 
     TEXT_EMOTE                          = 0,
 
@@ -832,19 +821,19 @@ public:
 
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
-            events.ScheduleEvent(EVENT_CHECK_AREA, 5000);
+            events.ScheduleEvent(EVENT_CHECK_AREA, 5s);
             me->SetSpeed(MOVE_RUN, 2.0f);
         }
 
-        void MovementInform(uint32 type, uint32  /*id*/)
+        void MovementInform(uint32 type, uint32  /*id*/) override
         {
             if (type == ESCORT_MOTION_TYPE && me->movespline->Finalized())
-                events.ScheduleEvent(EVENT_REACHED_HOME, 2000);
+                events.ScheduleEvent(EVENT_REACHED_HOME, 2s);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
 
@@ -872,18 +861,18 @@ public:
                             }
                     }
                     else
-                        events.ScheduleEvent(EVENT_CHECK_AREA, 5000);
+                        events.ScheduleEvent(EVENT_CHECK_AREA, 5s);
                     break;
                 case EVENT_REACHED_HOME:
                     if (Vehicle* vehicle = me->GetVehicleKit())
                         if (Unit* player = vehicle->GetPassenger(0))
-                            if (player->GetTypeId() == TYPEID_PLAYER)
+                            if (player->IsPlayer())
                             {
                                 // for each prisoner on drake, give credit
                                 for (uint8 i = 1; i < 4; ++i)
                                     if (Unit* prisoner = me->GetVehicleKit()->GetPassenger(i))
                                     {
-                                        if (prisoner->GetTypeId() != TYPEID_UNIT)
+                                        if (!prisoner->IsCreature())
                                             return;
                                         prisoner->CastSpell(player, SPELL_KILL_CREDIT_PRISONER, true);
                                         prisoner->CastSpell(prisoner, SPELL_SUMMON_LIBERATED, true);
@@ -897,7 +886,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_freed_protodrakeAI(creature);
     }
@@ -912,24 +901,24 @@ public:
     {
         npc_icefangAI(Creature* creature) : npc_escortAI(creature) { }
 
-        void AttackStart(Unit* /*who*/) { }
-        void EnterCombat(Unit* /*who*/) { }
-        void EnterEvadeMode() { }
+        void AttackStart(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
+        void EnterEvadeMode(EvadeReason /*why*/) override { }
 
-        void PassengerBoarded(Unit* who, int8 /*seatId*/, bool apply)
+        void PassengerBoarded(Unit* who, int8 /*seatId*/, bool apply) override
         {
-            if (who->GetTypeId() == TYPEID_PLAYER)
+            if (who->IsPlayer())
             {
                 if (apply)
                     Start(false, true, who->GetGUID());
             }
         }
 
-        void WaypointReached(uint32 /*waypointId*/) { }
-        void JustDied(Unit* /*killer*/) { }
-        void OnCharmed(bool /*apply*/) { }
+        void WaypointReached(uint32 /*waypointId*/) override { }
+        void JustDied(Unit* /*killer*/) override { }
+        void OnCharmed(bool /*apply*/) override { }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             npc_escortAI::UpdateAI(diff);
 
@@ -938,7 +927,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_icefangAI(creature);
     }
@@ -959,16 +948,36 @@ public:
     public:
         npc_hyldsmeet_protodrakeAI(Creature* creature) : CreatureAI(creature), _accessoryRespawnTimer(0), _vehicleKit(creature->GetVehicleKit()) { }
 
-        void PassengerBoarded(Unit* who, int8 /*seat*/, bool apply)
+        void PassengerBoarded(Unit* who, int8 /*seat*/, bool apply) override
         {
             if (apply)
+            {
+                class DelayedTransportPositionOffsets : public BasicEvent
+                {
+                    public:
+                        DelayedTransportPositionOffsets(Unit* owner) : _owner(owner) { }
+
+                        bool Execute(uint64 /*eventTime*/, uint32 /*updateTime*/) override
+                        {
+                            _owner->m_movementInfo.transport.pos.Relocate(-3.5f, 0.f, -0.2f, 0.f);
+                            return true;
+                        }
+
+                    private:
+                        Unit* _owner;
+                };
+
+                if (who->IsPlayer())
+                    who->m_Events.AddEvent(new DelayedTransportPositionOffsets(who), who->m_Events.CalculateTime(500));
+
                 return;
+            }
 
             if (who->GetEntry() == NPC_HYLDSMEET_DRAKERIDER)
                 _accessoryRespawnTimer = 5 * MINUTE * IN_MILLISECONDS;
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             //! We need to manually reinstall accessories because the vehicle itself is friendly to players,
             //! so EnterEvadeMode is never triggered. The accessory on the other hand is hostile and killable.
@@ -986,7 +995,7 @@ public:
         Vehicle* _vehicleKit;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_hyldsmeet_protodrakeAI(creature);
     }
@@ -997,63 +1006,181 @@ enum CloseRift
     SPELL_DESPAWN_RIFT          = 61665
 };
 
-class spell_close_rift : public SpellScriptLoader
+class spell_close_rift_aura : public AuraScript
 {
-public:
-    spell_close_rift() : SpellScriptLoader("spell_close_rift") { }
+    PrepareAuraScript(spell_close_rift_aura);
 
-    class spell_close_rift_AuraScript : public AuraScript
+    bool Load() override
     {
-        PrepareAuraScript(spell_close_rift_AuraScript);
+        _counter = 0;
+        return true;
+    }
 
-        bool Load()
-        {
-            _counter = 0;
-            return true;
-        }
-
-        bool Validate(SpellInfo const* /*spell*/)
-        {
-            return sSpellMgr->GetSpellInfo(SPELL_DESPAWN_RIFT);
-        }
-
-        void HandlePeriodic(AuraEffect const* /* aurEff */)
-        {
-            if (++_counter == 5)
-                GetTarget()->CastSpell((Unit*)NULL, SPELL_DESPAWN_RIFT, true);
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_close_rift_AuraScript::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_TRIGGER_SPELL);
-        }
-
-    private:
-        uint8 _counter;
-
-    };
-
-    AuraScript* GetAuraScript() const
+    bool Validate(SpellInfo const* /*spell*/) override
     {
-        return new spell_close_rift_AuraScript();
+        return ValidateSpellInfo({ SPELL_DESPAWN_RIFT });
+    }
+
+    void HandlePeriodic(AuraEffect const* /* aurEff */)
+    {
+        if (++_counter == 5)
+            GetTarget()->CastSpell((Unit*)nullptr, SPELL_DESPAWN_RIFT, true);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_close_rift_aura::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_TRIGGER_SPELL);
+    }
+
+private:
+    uint8 _counter;
+};
+
+enum CollapsingCave
+{
+    SPELL_COLLAPSING_CAVE = 55486
+};
+
+// 55693 - Remove Collapsing Cave Aura
+class spell_q12823_remove_collapsing_cave_aura : public SpellScript
+{
+    PrepareSpellScript(spell_q12823_remove_collapsing_cave_aura);
+
+    void HandleScriptEffect(SpellEffIndex /* effIndex */)
+    {
+        GetHitUnit()->RemoveAurasDueToSpell(SPELL_COLLAPSING_CAVE);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_q12823_remove_collapsing_cave_aura::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
+//Generic Fix for Quest WhenAllElseFails ID: 12862
+enum WhenAllElseFailsAlliance
+{
+    // Creature
+    NPC_PROPELLED_DEVICE_1      = 30477,
+    NPC_PROPELLED_DEVICE_2      = 30487,
+
+    // Spell
+    SPELL_EJECT_PLAYER          = 68576,
+    SPELL_KNOCKBACK_PLAYER      = 42895
+};
+
+class npc_vehicle_d16_propelled_delivery : public CreatureScript
+{
+public:
+    npc_vehicle_d16_propelled_delivery() : CreatureScript("npc_vehicle_d16_propelled_delivery") { }
+
+    struct npc_vehicle_d16_propelled_deliveryAI : public VehicleAI
+    {
+        npc_vehicle_d16_propelled_deliveryAI(Creature* creature) : VehicleAI(creature) { }
+
+        void PassengerBoarded(Unit* /*who*/, int8 /*seatId*/, bool apply) override
+        {
+            if (apply)
+            {
+                Movement::PointsArray pathPoints;
+                pathPoints.push_back(G3D::Vector3(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()));
+                WaypointPath const* i_path = sWaypointMgr->GetPath(me->GetEntry() * 100);
+                for (uint8 i = 0; i < i_path->size(); ++i)
+                {
+                    WaypointData const* node = i_path->at(i);
+                    pathPoints.push_back(G3D::Vector3(node->x, node->y, node->z));
+                }
+                me->GetMotionMaster()->MoveSplinePath(&pathPoints);
+                me->SetCanFly(true);
+                me->SetDisableGravity(true);
+                me->SetSpeed(MOVE_RUN, 6.0f);
+                me->SetSpeedRate(MOVE_FLIGHT, 8.0f);
+                me->setActive(true);
+            }
+        }
+
+        void MovementInform(uint32 type, uint32 id) override
+        {
+            if (type != ESCORT_MOTION_TYPE)
+                return;
+
+            switch (id)
+            {
+                case 12:
+                    if (me->GetEntry() == NPC_PROPELLED_DEVICE_2)
+                    {
+                        if (Vehicle* vehicle = me->GetVehicleKit())
+                        {
+                            if (Unit* player = vehicle->GetPassenger(0))
+                            {
+                                if (player->IsPlayer())
+                                {
+                                    player->m_Events.AddEventAtOffset([player]()
+                                    {
+                                        player->CastSpell(player, SPELL_KNOCKBACK_PLAYER, true);
+                                    }, 1s);
+                                }
+                            }
+                        }
+
+                        DoCastSelf(SPELL_EJECT_PLAYER);
+                    }
+                    break;
+                case 17:
+                    if (me->GetEntry() == NPC_PROPELLED_DEVICE_1)
+                    {
+                        if (Vehicle* vehicle = me->GetVehicleKit())
+                        {
+                            if (Unit* player = vehicle->GetPassenger(0))
+                            {
+                                if (player->IsPlayer())
+                                {
+                                    player->m_Events.AddEventAtOffset([player]()
+                                    {
+                                        player->CastSpell(player, SPELL_KNOCKBACK_PLAYER, true);
+                                    }, 1s);
+                                }
+                            }
+                        }
+
+                        DoCastSelf(SPELL_EJECT_PLAYER);
+                    }
+                    else
+                    {
+                        me->DespawnOrUnsummon(100);
+                    }
+                    break;
+                case 24:
+                    if (me->GetEntry() == NPC_PROPELLED_DEVICE_1)
+                    {
+                        me->DespawnOrUnsummon(100);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_vehicle_d16_propelled_deliveryAI(creature);
+    }
+};
 void AddSC_storm_peaks()
 {
-    // Ours
     new npc_frosthound();
     new npc_iron_watcher();
     new npc_time_lost_proto_drake();
     new npc_wild_wyrm();
-    new spell_q13003_thursting_hodirs_spear();
-    new spell_q13007_iron_colossus();
-
-    // Theirs
+    RegisterSpellScript(spell_q13003_thursting_hodirs_spear_aura);
+    RegisterSpellScript(spell_q13007_iron_colossus);
     new npc_roxi_ramrocket();
     new npc_brunnhildar_prisoner();
     new npc_freed_protodrake();
     new npc_icefang();
     new npc_hyldsmeet_protodrake();
-    new spell_close_rift();
+    RegisterSpellScript(spell_close_rift_aura);
+    new npc_vehicle_d16_propelled_delivery();
+    RegisterSpellScript(spell_q12823_remove_collapsing_cave_aura);
 }

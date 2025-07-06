@@ -1,21 +1,37 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "blackrock_spire.h"
 
 enum Spells
 {
-    SPELL_REND_MOUNTS               = 16167, // Change model
-    SPELL_CORROSIVE_ACID            = 16359, // Combat (self cast)
-    SPELL_FLAMEBREATH               = 16390, // Combat (Self cast)
-    SPELL_FREEZE                    = 16350, // Combat (Self cast)
-    SPELL_KNOCK_AWAY                = 10101, // Combat
-    SPELL_SUMMON_REND               = 16328  // Summons Rend near death
+    SPELL_REND_MOUNTS                 = 16167, // Change model
+    SPELL_CORROSIVE_ACID              = 16359, // Combat (self cast)
+    SPELL_FLAMEBREATH                 = 16390, // Combat (Self cast)
+    SPELL_FREEZE                      = 16350, // Combat (Self cast)
+    SPELL_KNOCK_AWAY                  = 10101, // Combat
+    SPELL_SUMMON_REND                 = 16328, // Summons Rend near death
+    SPELL_CHROMATIC_PROTECTION_FIRE   = 16373,
+    SPELL_CHROMATIC_PROTECTION_FROST  = 16392,
+    SPELL_CHROMATIC_PROTECTION_NATURE = 16391,
 };
 
 enum Misc
@@ -44,62 +60,59 @@ public:
     {
         boss_gythAI(Creature* creature) : BossAI(creature, DATA_GYTH) { }
 
-        bool SummonedRend;
-
-        void Reset()
+        void Reset() override
         {
-            SummonedRend = false;
             if (instance->GetBossState(DATA_GYTH) == IN_PROGRESS)
             {
                 instance->SetBossState(DATA_GYTH, NOT_STARTED);
                 summons.DespawnAll();
                 me->DespawnOrUnsummon();
             }
+
+            SetInvincibility(true); // Don't let boss die before summoning Rend.
+
+            ScheduleHealthCheckEvent(25, [&] {
+                DoCastAOE(SPELL_SUMMON_REND, true);
+                me->RemoveAura(SPELL_REND_MOUNTS);
+                SetInvincibility(false);
+            });
         }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
-            _EnterCombat();
+            _JustEngagedWith();
 
-            events.ScheduleEvent(EVENT_CORROSIVE_ACID, urand(8000, 16000));
-            events.ScheduleEvent(EVENT_FREEZE, urand(8000, 16000));
-            events.ScheduleEvent(EVENT_FLAME_BREATH, urand(8000, 16000));
-            events.ScheduleEvent(EVENT_KNOCK_AWAY, urand(12000, 18000));
+            events.ScheduleEvent(EVENT_CORROSIVE_ACID, 8s, 16s);
+            events.ScheduleEvent(EVENT_FREEZE, 8s, 16s);
+            events.ScheduleEvent(EVENT_FLAME_BREATH, 8s, 16s);
+            events.ScheduleEvent(EVENT_KNOCK_AWAY, 12s, 18s);
         }
 
-        void JustDied(Unit* /*killer*/)
+        void EnterEvadeMode(EvadeReason why) override
         {
-            instance->SetBossState(DATA_GYTH, DONE);
+            instance->SetBossState(DATA_WARCHIEF_REND_BLACKHAND, FAIL);
+            BossAI::EnterEvadeMode(why);
         }
 
-        void SetData(uint32 /*type*/, uint32 data)
+        void IsSummonedBy(WorldObject* /*summoner*/) override
         {
-            switch (data)
-            {
-                case 1:
-                    events.ScheduleEvent(EVENT_SUMMONED_1, 1000);
-                    break;
-                default:
-                    break;
-            }
+            events.ScheduleEvent(EVENT_SUMMONED_1, 1000);
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
             summon->AI()->AttackStart(me->SelectVictim());
         }
 
-        void UpdateAI(uint32 diff)
+        // Prevent clearing summon list, otherwise Rend despawns if the drake is killed first.
+        void JustDied(Unit* /*killer*/) override
         {
+            instance->SetBossState(DATA_GYTH, DONE);
+        }
 
-            if (!SummonedRend && HealthBelowPct(25))
-            {
-                DoCast(me, SPELL_SUMMON_REND);
-                me->RemoveAura(SPELL_REND_MOUNTS);
-                SummonedRend = true;
-            }
-
+        void UpdateAI(uint32 diff) override
+        {
             if (!UpdateVictim())
             {
                 events.Update(diff);
@@ -112,9 +125,7 @@ public:
                             me->AddAura(SPELL_REND_MOUNTS, me);
                             if (GameObject* portcullis = me->FindNearestGameObject(GO_DR_PORTCULLIS, 40.0f))
                                 portcullis->UseDoorOrButton();
-                            if (Creature* victor = me->FindNearestCreature(NPC_LORD_VICTOR_NEFARIUS, 75.0f, true))
-                                victor->AI()->SetData(1, 1);
-                            events.ScheduleEvent(EVENT_SUMMONED_2, 2000);
+                            events.ScheduleEvent(EVENT_SUMMONED_2, 2s);
                             break;
                         case EVENT_SUMMONED_2:
                             me->GetMotionMaster()->MovePath(GYTH_PATH_1, false);
@@ -134,19 +145,19 @@ public:
                 {
                     case EVENT_CORROSIVE_ACID:
                         DoCast(me, SPELL_CORROSIVE_ACID);
-                        events.ScheduleEvent(EVENT_CORROSIVE_ACID, urand(10000, 16000));
+                        events.ScheduleEvent(EVENT_CORROSIVE_ACID, 10s, 16s);
                         break;
                     case EVENT_FREEZE:
                         DoCast(me, SPELL_FREEZE);
-                        events.ScheduleEvent(EVENT_FREEZE, urand(10000, 16000));
+                        events.ScheduleEvent(EVENT_FREEZE, 10s, 16s);
                         break;
                     case EVENT_FLAME_BREATH:
                         DoCast(me, SPELL_FLAMEBREATH);
-                        events.ScheduleEvent(EVENT_FLAME_BREATH, urand(10000, 16000));
+                        events.ScheduleEvent(EVENT_FLAME_BREATH, 10s, 16s);
                         break;
                     case EVENT_KNOCK_AWAY:
                         DoCastVictim(SPELL_KNOCK_AWAY);
-                        events.ScheduleEvent(EVENT_KNOCK_AWAY, urand(14000, 20000));
+                        events.ScheduleEvent(EVENT_KNOCK_AWAY, 14s, 20s);
                         break;
                     default:
                         break;
@@ -156,13 +167,70 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_gythAI>(creature);
+        return GetBlackrockSpireAI<boss_gythAI>(creature);
+    }
+};
+
+// 16372 - Chromatic Protection
+class spell_gyth_chromatic_protection : public AuraScript
+{
+    PrepareAuraScript(spell_gyth_chromatic_protection);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_CORROSIVE_ACID, SPELL_FLAMEBREATH, SPELL_FREEZE });
+    }
+
+    bool CheckProc(ProcEventInfo& eventInfo)
+    {
+        if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
+        {
+            switch (spellInfo->Id)
+            {
+                case SPELL_CORROSIVE_ACID:
+                case SPELL_FLAMEBREATH:
+                case SPELL_FREEZE:
+                    return true;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    void HandleProc(AuraEffect const* /* aurEff */, ProcEventInfo& eventInfo)
+    {
+        PreventDefaultAction();
+        if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
+        {
+            switch (spellInfo->Id)
+            {
+                case SPELL_CORROSIVE_ACID:
+                    GetTarget()->CastSpell(GetTarget(), SPELL_CHROMATIC_PROTECTION_NATURE, true);
+                    break;
+                case SPELL_FLAMEBREATH:
+                    GetTarget()->CastSpell(GetTarget(), SPELL_CHROMATIC_PROTECTION_FIRE, true);
+                    break;
+                case SPELL_FREEZE:
+                    GetTarget()->CastSpell(GetTarget(), SPELL_CHROMATIC_PROTECTION_FROST, true);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectProc += AuraEffectProcFn(spell_gyth_chromatic_protection::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
     }
 };
 
 void AddSC_boss_gyth()
 {
     new boss_gyth();
+    RegisterSpellScript(spell_gyth_chromatic_protection);
 }

@@ -1,17 +1,30 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
 #include "blackfathom_deeps.h"
 
 class instance_blackfathom_deeps : public InstanceMapScript
 {
 public:
-    instance_blackfathom_deeps() : InstanceMapScript("instance_blackfathom_deeps", 48) { }
+    instance_blackfathom_deeps() : InstanceMapScript("instance_blackfathom_deeps", MAP_BLACKFATHOM_DEEPS) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* map) const
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
         return new instance_blackfathom_deeps_InstanceMapScript(map);
     }
@@ -20,32 +33,37 @@ public:
     {
         instance_blackfathom_deeps_InstanceMapScript(Map* map) : InstanceScript(map) { }
 
-        void Initialize()
+        void Initialize() override
         {
+            SetHeaders(DataHeader);
             memset(&_encounters, 0, sizeof(_encounters));
-            _akumaiPortalGUID = 0;
             _requiredDeaths = 0;
         }
 
-        void OnCreatureCreate(Creature* creature)
+        void OnCreatureCreate(Creature* creature) override
         {
             if (creature->IsSummon() && (creature->GetEntry() == NPC_BARBED_CRUSTACEAN || creature->GetEntry() == NPC_AKU_MAI_SERVANT ||
                                          creature->GetEntry() == NPC_MURKSHALLOW_SOFTSHELL || creature->GetEntry() == NPC_AKU_MAI_SNAPJAW))
                 ++_requiredDeaths;
         }
 
-        void OnUnitDeath(Unit* unit)
+        void OnUnitDeath(Unit* unit) override
         {
             if (unit->IsSummon() && (unit->GetEntry() == NPC_BARBED_CRUSTACEAN || unit->GetEntry() == NPC_AKU_MAI_SERVANT ||
                                      unit->GetEntry() == NPC_MURKSHALLOW_SOFTSHELL || unit->GetEntry() == NPC_AKU_MAI_SNAPJAW))
             {
                 if (--_requiredDeaths == 0)
-                    if (_encounters[TYPE_FIRE1] == DONE && _encounters[TYPE_FIRE2] == DONE && _encounters[TYPE_FIRE3] == DONE && _encounters[TYPE_FIRE4] == DONE)
+                {
+                    if (IsFireEventDone())
+                    {
                         HandleGameObject(_akumaiPortalGUID, true);
+                        _encounters[TYPE_AKU_MAI_EVENT] = DONE;
+                    }
+                }
             }
         }
 
-        void OnGameObjectCreate(GameObject* gameobject)
+        void OnGameObjectCreate(GameObject* gameobject) override
         {
             switch (gameobject->GetEntry())
             {
@@ -53,29 +71,29 @@ public:
                 case GO_FIRE_OF_AKU_MAI_2:
                 case GO_FIRE_OF_AKU_MAI_3:
                 case GO_FIRE_OF_AKU_MAI_4:
-                    if (_encounters[gameobject->GetEntry() - GO_FIRE_OF_AKU_MAI_1 + 1] == DONE)
+                    if (_encounters[TYPE_AKU_MAI_EVENT] == DONE)
                     {
-                        gameobject->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
+                        gameobject->SetGameObjectFlag(GO_FLAG_IN_USE);
                         gameobject->SetGoState(GO_STATE_ACTIVE);
                     }
                     break;
                 case GO_SHRINE_OF_GELIHAST:
                     if (_encounters[TYPE_GELIHAST] == DONE)
-                        gameobject->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        gameobject->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     break;
                 case GO_ALTAR_OF_THE_DEEPS:
                     if (_encounters[TYPE_AKU_MAI] == DONE)
-                        gameobject->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        gameobject->RemoveGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     break;
                 case GO_AKU_MAI_DOOR:
-                    if (_encounters[TYPE_FIRE1] == DONE && _encounters[TYPE_FIRE2] == DONE && _encounters[TYPE_FIRE3] == DONE && _encounters[TYPE_FIRE4] == DONE)
-                        HandleGameObject(0, true, gameobject);
+                    if (IsFireEventDone() && _encounters[TYPE_AKU_MAI_EVENT] == DONE)
+                        HandleGameObject(ObjectGuid::Empty, true, gameobject);
                     _akumaiPortalGUID = gameobject->GetGUID();
                     break;
             }
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
             switch (type)
             {
@@ -85,6 +103,7 @@ public:
                 case TYPE_FIRE3:
                 case TYPE_FIRE4:
                 case TYPE_AKU_MAI:
+                case TYPE_AKU_MAI_EVENT:
                     _encounters[type] = data;
                     break;
             }
@@ -93,35 +112,34 @@ public:
                 SaveToDB();
         }
 
-        std::string GetSaveData()
+        void ReadSaveDataMore(std::istringstream& data) override
         {
-            std::ostringstream saveStream;
-            saveStream << "B L " << _encounters[0] << ' ' << _encounters[1] << ' ' << _encounters[2] << ' ' << _encounters[3] << ' ' << _encounters[4] << ' ' << _encounters[5];
-            return saveStream.str();
+            data >> _encounters[0];
+            data >> _encounters[1];
+            data >> _encounters[2];
+            data >> _encounters[3];
+            data >> _encounters[4];
+            data >> _encounters[5];
         }
 
-        void Load(const char* in)
+        void WriteSaveDataMore(std::ostringstream& data) override
         {
-            if (!in)
-                return;
+            data << _encounters[0] << ' '
+                << _encounters[1] << ' '
+                << _encounters[2] << ' '
+                << _encounters[3] << ' '
+                << _encounters[4] << ' '
+                << _encounters[5];
+        }
 
-            char dataHead1, dataHead2;
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2;
-            if (dataHead1 == 'B' && dataHead2 == 'L')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    loadStream >> _encounters[i];
-                    if (_encounters[i] == IN_PROGRESS)
-                        _encounters[i] = NOT_STARTED;
-                }
-            }
+        bool IsFireEventDone()
+        {
+            return _encounters[TYPE_FIRE1] == DONE && _encounters[TYPE_FIRE2] == DONE && _encounters[TYPE_FIRE3] == DONE && _encounters[TYPE_FIRE4] == DONE;
         }
 
     private:
         uint32 _encounters[MAX_ENCOUNTERS];
-        uint64 _akumaiPortalGUID;
+        ObjectGuid _akumaiPortalGUID;
         uint8 _requiredDeaths;
     };
 };

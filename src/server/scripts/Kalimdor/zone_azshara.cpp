@@ -1,117 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Azshara
-SD%Complete: 90
-SDComment: Quest support: 2744, 3141, 9364, 10994
-SDCategory: Azshara
-EndScriptData */
-
-/* ContentData
-npc_spitelashes
-npc_rizzle_sprysprocket
-npc_depth_charge
-EndContentData */
-
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
-#include "Player.h"
-#include "SpellInfo.h"
-
-/*######
-## npc_spitelashes
-######*/
-
-enum Spitelashes
-{
-    SPELL_POLYMORPH_RANK1       = 118,
-    SPELL_POLYMORPH_RANK2       = 12824,
-    SPELL_POLYMORPH_RANK3       = 12825,
-    SPELL_POLYMORPH_RANK4       = 12826,
-    SPELL_POLYMORPH             = 29124,
-    SPELL_POLYMORPH_BACKFIRE    = 28406,
-    SPELL_REMOVE_POLYMORPH      = 6924
-};
-
-class npc_spitelashes : public CreatureScript
-{
-public:
-    npc_spitelashes() : CreatureScript("npc_spitelashes") { }
-
-    struct npc_spitelashesAI : public ScriptedAI
-    {
-        npc_spitelashesAI(Creature* creature) : ScriptedAI(creature) { }
-
-        uint32 morphtimer;
-        bool spellhit;
-
-        void Reset()
-        {
-            morphtimer = 0;
-            spellhit = false;
-        }
-
-        void EnterCombat(Unit* /*who*/) { }
-
-        void SpellHit(Unit* unit, const SpellInfo* spell)
-        {
-            if (spellhit)
-                return;
-
-            switch (spell->Id)
-            {
-                case SPELL_POLYMORPH_RANK1:
-                case SPELL_POLYMORPH_RANK2:
-                case SPELL_POLYMORPH_RANK3:
-                case SPELL_POLYMORPH_RANK4:
-                    if (Player* player = unit->ToPlayer())
-                        if (player->GetQuestStatus(9364) == QUEST_STATUS_INCOMPLETE)
-                        {
-                            spellhit = true;
-                            DoCast(me, SPELL_POLYMORPH);
-                        }
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        void UpdateAI(uint32 diff)
-        {
-            // we mustn't remove the Creature in the same round in which we cast the summon spell, otherwise there will be no summons
-            if (spellhit && morphtimer >= 5000)
-            {
-                me->DespawnOrUnsummon();
-                return;
-            }
-            // walk 5 seconds before summoning
-            if (spellhit && morphtimer < 5000)
-            {
-                morphtimer += diff;
-                if (morphtimer >= 5000)
-                {
-                    DoCast(me, SPELL_POLYMORPH_BACKFIRE); // summon copies
-                    DoCast(me, SPELL_REMOVE_POLYMORPH);   // visual explosion
-                }
-            }
-            if (!UpdateVictim())
-                return;
-
-            /// @todo add abilities for the different creatures
-            DoMeleeAttackIfReady();
-        }
-    };
-
-    CreatureAI* GetAI(Creature* creature) const
-    {
-        return new npc_spitelashesAI(creature);
-    }
-};
 
 /*####
 # npc_rizzle_sprysprocket
@@ -133,10 +40,10 @@ enum RizzleSprysprocketData
     SAY_RIZZLE_START                = 0,
     SAY_RIZZLE_GRENADE              = 1,
     SAY_RIZZLE_FINAL                = 2,
-    MSG_ESCAPE_NOTICE               = 3
-};
+    MSG_ESCAPE_NOTICE               = 3,
+    GOSSIP_GET_MOONSTONE            = 21893
 
-#define GOSSIP_GET_MOONSTONE "Hand over the Southfury moonstone and I'll let you go."
+};
 
 Position const WPs[58] =
 {
@@ -218,7 +125,7 @@ public:
             MustDieTimer = 3000;
             CurrWP = 0;
 
-            PlayerGUID = 0;
+            PlayerGUID.Clear();
 
             MustDie = false;
             Escape = false;
@@ -226,7 +133,7 @@ public:
             Reached = false;
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
 
         void AttackStart(Unit* who) override
         {
@@ -344,8 +251,8 @@ public:
                 if (me->IsWithinDist(player, 10) && me->GetPositionX() > player->GetPositionX() && !Reached)
                 {
                     Talk(SAY_RIZZLE_FINAL);
-                    me->SetUInt32Value(UNIT_NPC_FLAGS, 1);
-                    me->setFaction(35);
+                    me->ReplaceAllNpcFlags(NPCFlags(1));
+                    me->SetFaction(FACTION_FRIENDLY);
                     me->GetMotionMaster()->MoveIdle();
                     me->RemoveAurasDueToSpell(SPELL_PERIODIC_DEPTH_CHARGE);
                     Reached = true;
@@ -357,7 +264,7 @@ public:
         }
 
     private:
-        uint64 PlayerGUID;
+        ObjectGuid PlayerGUID;
         uint32 SpellEscapeTimer;
         uint32 TeleportTimer;
         uint32 CheckTimer;
@@ -375,7 +282,7 @@ public:
         if (player->GetQuestStatus(QUEST_CHASING_THE_MOONSTONE) != QUEST_STATUS_INCOMPLETE)
             return true;
 
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, GOSSIP_GET_MOONSTONE, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
+        AddGossipItemFor(player, GOSSIP_GET_MOONSTONE, 0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
         SendGossipMenuFor(player, 10811, creature->GetGUID());
 
         return true;
@@ -402,25 +309,25 @@ public:
         bool WeMustDie;
         uint32 WeMustDieTimer;
 
-        void Reset()
+        void Reset() override
         {
             me->SetHover(true);
             me->SetSwim(true);
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
             WeMustDie = false;
             WeMustDieTimer = 1000;
         }
 
-        void EnterCombat(Unit* /*who*/) { }
+        void JustEngagedWith(Unit* /*who*/) override { }
 
-        void AttackStart(Unit* /*who*/) { }
+        void AttackStart(Unit* /*who*/) override { }
 
-        void MoveInLineOfSight(Unit* who)
+        void MoveInLineOfSight(Unit* who) override
         {
             if (!who)
                 return;
 
-            if (who->GetTypeId() == TYPEID_PLAYER && me->IsWithinDistInMap(who, 5))
+            if (who->IsPlayer() && me->IsWithinDistInMap(who, 5))
             {
                 DoCast(who, SPELL_DEPTH_CHARGE_TRAP);
                 WeMustDie = true;
@@ -428,7 +335,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (WeMustDie)
             {
@@ -441,7 +348,7 @@ public:
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_depth_chargeAI(creature);
     }
@@ -449,7 +356,6 @@ public:
 
 void AddSC_azshara()
 {
-    new npc_spitelashes();
     new npc_rizzle_sprysprocket();
     new npc_depth_charge();
 }

@@ -1,10 +1,27 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "AchievementCriteriaScript.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
+#include "SpellScriptLoader.h"
 #include "gundrak.h"
+#include "SpellInfo.h"
+#include "SpellScript.h"
 
 enum eSpells
 {
@@ -48,9 +65,9 @@ class boss_moorabi : public CreatureScript
 public:
     boss_moorabi() : CreatureScript("boss_moorabi") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_moorabiAI>(creature);
+        return GetGundrakAI<boss_moorabiAI>(creature);
     }
 
     struct boss_moorabiAI : public BossAI
@@ -61,26 +78,26 @@ public:
 
         EventMap events2;
 
-        void Reset()
+        void Reset() override
         {
             BossAI::Reset();
             events2.Reset();
-            events2.ScheduleEvent(EVENT_PHANTOM, 21000);
+            events2.ScheduleEvent(EVENT_PHANTOM, 21s);
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
             Talk(SAY_AGGRO);
-            BossAI::EnterCombat(who);
+            BossAI::JustEngagedWith(who);
             me->CastSpell(me, SPELL_MOJO_FRENZY, true);
 
-            events.ScheduleEvent(EVENT_GROUND_TREMOR, 18000);
-            events.ScheduleEvent(EVENT_NUMBLING_SHOUT, 10000);
-            events.ScheduleEvent(EVENT_DETERMINED_STAB, 20000);
-            events.ScheduleEvent(EVENT_TRANSFORMATION, 12000);
+            events.ScheduleEvent(EVENT_GROUND_TREMOR, 18s);
+            events.ScheduleEvent(EVENT_NUMBLING_SHOUT, 10s);
+            events.ScheduleEvent(EVENT_DETERMINED_STAB, 20s);
+            events.ScheduleEvent(EVENT_TRANSFORMATION, 12s);
         }
 
-        void SpellHitTarget(Unit*  /*caster*/, const SpellInfo* spellInfo)
+        void SpellHitTarget(Unit*  /*caster*/, SpellInfo const* spellInfo) override
         {
             if (spellInfo->Id == SPELL_TRANSFORMATION)
             {
@@ -90,23 +107,23 @@ public:
             }
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             Talk(SAY_DEATH);
             Talk(EMOTE_ALTAR);
             BossAI::JustDied(killer);
         }
 
-        void KilledUnit(Unit*)
+        void KilledUnit(Unit*) override
         {
             if (events.GetNextEventTime(EVENT_KILL_TALK) == 0)
             {
                 Talk(SAY_SLAY);
-                events.ScheduleEvent(EVENT_KILL_TALK, 6000);
+                events.ScheduleEvent(EVENT_KILL_TALK, 6s);
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!me->IsInCombat())
             {
@@ -114,7 +131,7 @@ public:
                 if (events2.ExecuteEvent() == EVENT_PHANTOM)
                 {
                     me->CastSpell(me, SPELL_SUMMON_PHANTOM, true);
-                    events2.ScheduleEvent(EVENT_PHANTOM, urand(20000, 25000));
+                    events2.ScheduleEvent(EVENT_PHANTOM, 20s, 25s);
                 }
             }
 
@@ -131,22 +148,22 @@ public:
                     if (roll_chance_i(50))
                         Talk(SAY_QUAKE);
                     me->CastSpell(me, me->GetDisplayId() != me->GetNativeDisplayId() ? SPELL_QUAKE : SPELL_GROUND_TREMOR, false);
-                    events.ScheduleEvent(EVENT_GROUND_TREMOR, 10000);
+                    events.ScheduleEvent(EVENT_GROUND_TREMOR, 10s);
                     break;
                 case EVENT_NUMBLING_SHOUT:
                     me->CastSpell(me, me->GetDisplayId() != me->GetNativeDisplayId() ? SPELL_NUMBING_ROAR : SPELL_NUMBING_SHOUT, false);
-                    events.ScheduleEvent(EVENT_NUMBLING_SHOUT, 10000);
+                    events.ScheduleEvent(EVENT_NUMBLING_SHOUT, 10s);
                     break;
                 case EVENT_DETERMINED_STAB:
                     me->CastSpell(me->GetVictim(), me->GetDisplayId() != me->GetNativeDisplayId() ? SPELL_DETERMINED_GORE : SPELL_DETERMINED_STAB, false);
-                    events.ScheduleEvent(EVENT_DETERMINED_STAB, 8000);
+                    events.ScheduleEvent(EVENT_DETERMINED_STAB, 8s);
                     break;
                 case EVENT_TRANSFORMATION:
                     Talk(EMOTE_TRANSFORM);
                     Talk(SAY_TRANSFORM);
                     me->CastSpell(me, SPELL_TRANSFORMATION, false);
                     me->CastSpell(me, SPELL_SUMMON_PHANTOM_TRANSFORM, true);
-                    events.ScheduleEvent(EVENT_TRANSFORMATION, 10000);
+                    events.ScheduleEvent(EVENT_TRANSFORMATION, 10s);
                     break;
             }
 
@@ -155,34 +172,23 @@ public:
     };
 };
 
-class spell_moorabi_mojo_frenzy : public SpellScriptLoader
+class spell_moorabi_mojo_frenzy_aura : public AuraScript
 {
-public:
-    spell_moorabi_mojo_frenzy() : SpellScriptLoader("spell_moorabi_mojo_frenzy") { }
+    PrepareAuraScript(spell_moorabi_mojo_frenzy_aura);
 
-    class spell_moorabi_mojo_frenzy_AuraScript : public AuraScript
+    void HandlePeriodic(AuraEffect const*  /*aurEff*/)
     {
-        PrepareAuraScript(spell_moorabi_mojo_frenzy_AuraScript);
+        PreventDefaultAction();
 
-        void HandlePeriodic(AuraEffect const*  /*aurEff*/)
-        {
-            PreventDefaultAction();
+        if (GetUnitOwner()->GetMap()->IsHeroic())
+            GetUnitOwner()->SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f * (GetUnitOwner()->GetHealthPct()*GetUnitOwner()->GetHealthPct() / 10000.0f));
+        else
+            GetUnitOwner()->SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f * (GetUnitOwner()->GetHealthPct() / 100.0f));
+    }
 
-            if (GetUnitOwner()->GetMap()->IsHeroic())
-                GetUnitOwner()->SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f * (GetUnitOwner()->GetHealthPct()*GetUnitOwner()->GetHealthPct() / 10000.0f));
-            else
-                GetUnitOwner()->SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0f * (GetUnitOwner()->GetHealthPct() / 100.0f));
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_moorabi_mojo_frenzy_AuraScript::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void Register() override
     {
-        return new spell_moorabi_mojo_frenzy_AuraScript();
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_moorabi_mojo_frenzy_aura::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -193,7 +199,7 @@ public:
     {
     }
 
-    bool OnCheck(Player* /*player*/, Unit* target)
+    bool OnCheck(Player* /*player*/, Unit* target, uint32 /*criteria_id*/) override
     {
         return target && target->GetDisplayId() == target->GetNativeDisplayId();
     }
@@ -202,6 +208,6 @@ public:
 void AddSC_boss_moorabi()
 {
     new boss_moorabi();
-    new spell_moorabi_mojo_frenzy();
+    RegisterSpellScript(spell_moorabi_mojo_frenzy_aura);
     new achievement_less_rabi();
 }

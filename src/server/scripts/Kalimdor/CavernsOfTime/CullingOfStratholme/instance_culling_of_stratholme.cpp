@@ -1,21 +1,37 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
+#include "CreatureScript.h"
 #include "CreatureTextMgr.h"
-#include "culling_of_stratholme.h"
+#include "InstanceMapScript.h"
 #include "Player.h"
-#include "TemporarySummon.h"
+#include "ScriptedCreature.h"
 #include "SpellInfo.h"
+#include "TemporarySummon.h"
+#include "WorldStateDefines.h"
+#include "WorldStatePackets.h"
+#include "culling_of_stratholme.h"
 
 class instance_culling_of_stratholme : public InstanceMapScript
 {
 public:
-    instance_culling_of_stratholme() : InstanceMapScript("instance_culling_of_stratholme", 595) { }
+    instance_culling_of_stratholme() : InstanceMapScript("instance_culling_of_stratholme", MAP_THE_CULLING_OF_STRATHOLME) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* pMap) const
+    InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
         return new instance_culling_of_stratholme_InstanceMapScript(pMap);
     }
@@ -24,15 +40,8 @@ public:
     {
         instance_culling_of_stratholme_InstanceMapScript(Map* pMap) : InstanceScript(pMap)
         {
-            // NPCs
-            _arthasGUID = 0;
-            _infiniteGUID = 0;
-
-            // GOs
-            _shkafGateGUID = 0;
-            _exitGateGUID = 0;
-
             // Instance
+            SetHeaders(DataHeader);
             _crateCount = 0;
             _showCrateTimer = 0;
             _guardianTimer = 0;
@@ -41,32 +50,31 @@ public:
             _loadTimer = 0;
         }
 
-        bool IsEncounterInProgress() const
+        bool IsEncounterInProgress() const override
         {
             return false;
         }
 
-        void FillInitialWorldStates(WorldPacket& data)
+        void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override
         {
-            data << uint32(WORLDSTATE_SHOW_CRATES) << uint32(0);
-            data << uint32(WORLDSTATE_CRATES_REVEALED) << uint32(_crateCount);
-            data << uint32(WORLDSTATE_WAVE_COUNT) << uint32(0);
-            data << uint32(WORLDSTATE_TIME_GUARDIAN) << uint32(25);
-            data << uint32(WORLDSTATE_TIME_GUARDIAN_SHOW) << uint32(0);
+            packet.Worldstates.reserve(5);
+            packet.Worldstates.emplace_back(WORLD_STATE_CULLING_OF_STRATHOLME_SHOW_CRATES, 0);
+            packet.Worldstates.emplace_back(WORLD_STATE_CULLING_OF_STRATHOLME_CRATES_REVEALED, _crateCount);
+            packet.Worldstates.emplace_back(WORLD_STATE_CULLING_OF_STRATHOLME_WAVE_COUNT, 0);
+            packet.Worldstates.emplace_back(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN, 25);
+            packet.Worldstates.emplace_back(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN_SHOW, 0);
         }
 
-        void OnPlayerEnter(Player* plr)
+        void OnPlayerEnter(Player* plr) override
         {
             if (instance->GetPlayersCountExceptGMs() == 1)
                 SetData(DATA_ARTHAS_REPOSITION, 2);
-
-            EnsureGridLoaded();
 
             if (plr->getRace() != RACE_HUMAN && plr->getRace() != RACE_DWARF && plr->getRace() != RACE_GNOME)
                 plr->CastSpell(plr, ((plr->getGender() == GENDER_MALE) ? SPELL_HUMAN_MALE : SPELL_HUMAN_FEMALE), true);
         }
 
-        void OnCreatureCreate(Creature* creature)
+        void OnCreatureCreate(Creature* creature) override
         {
             switch (creature->GetEntry())
             {
@@ -83,7 +91,7 @@ public:
             }
         }
 
-        void OnGameObjectCreate(GameObject* go)
+        void OnGameObjectCreate(GameObject* go) override
         {
             switch (go->GetEntry())
             {
@@ -100,18 +108,18 @@ public:
             }
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
             switch (type)
             {
                 case DATA_SHOW_CRATES:
-                    DoUpdateWorldState(WORLDSTATE_SHOW_CRATES, data);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_SHOW_CRATES, data);
                     return;
                 case DATA_SHOW_INFINITE_TIMER:
                     if (!instance->IsHeroic() || !_guardianTimer)
                         return;
-                    DoUpdateWorldState(WORLDSTATE_TIME_GUARDIAN_SHOW, data);
-                    DoUpdateWorldState(WORLDSTATE_TIME_GUARDIAN, uint32(_guardianTimer / (MINUTE * IN_MILLISECONDS)));
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN_SHOW, data);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN, uint32(_guardianTimer / (MINUTE * IN_MILLISECONDS)));
                     if (data == 0)
                     {
                         _guardianTimer = 0;
@@ -121,10 +129,10 @@ public:
                         instance->SummonCreature(NPC_INFINITE, EventPos[EVENT_SRC_CORRUPTOR]);
                     return;
                 case DATA_START_WAVES:
-                    DoUpdateWorldState(WORLDSTATE_WAVE_COUNT, 1);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_WAVE_COUNT, 1);
                     if (instance->IsHeroic())
                     {
-                        DoUpdateWorldState(WORLDSTATE_TIME_GUARDIAN_SHOW, true);
+                        DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN_SHOW, true);
                         _guardianTimer = 26 * MINUTE * IN_MILLISECONDS;
                         if (!_infiniteGUID)
                             instance->SummonCreature(NPC_INFINITE, EventPos[EVENT_SRC_CORRUPTOR]);
@@ -135,16 +143,16 @@ public:
                     if (_crateCount == 5)
                     {
                         Map::PlayerList const& PlayerList = instance->GetPlayers();
-                        if (!PlayerList.isEmpty())
+                        if (!PlayerList.IsEmpty())
                             for (Map::PlayerList::const_iterator i = PlayerList.begin(); i != PlayerList.end(); ++i)
-                                i->GetSource()->KilledMonsterCredit(NPC_GRAIN_CREATE_TRIGGER, 0);
+                                i->GetSource()->KilledMonsterCredit(NPC_GRAIN_CREATE_TRIGGER);
 
                         _showCrateTimer++;
                         if (GetData(DATA_ARTHAS_EVENT) < COS_PROGRESS_CRATES_FOUND)
                             SetData(DATA_ARTHAS_EVENT, COS_PROGRESS_CRATES_FOUND);
                     }
 
-                    DoUpdateWorldState(WORLDSTATE_CRATES_REVEALED, _crateCount);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_CRATES_REVEALED, _crateCount);
                     return;
                 case DATA_ARTHAS_EVENT:
                     // Start Event
@@ -166,14 +174,13 @@ public:
                     else if (Creature* arthas = instance->GetCreature(_arthasGUID))
                         Reposition(arthas);
                     return;
-
             }
 
             if (type == DATA_ARTHAS_EVENT)
                 SaveToDB();
         }
 
-        uint32 GetData(uint32 type) const
+        uint32 GetData(uint32 type) const override
         {
             switch (type)
             {
@@ -185,7 +192,7 @@ public:
             return 0;
         }
 
-        uint64 GetData64(uint32 identifier) const
+        ObjectGuid GetGuidData(uint32 identifier) const override
         {
             switch (identifier)
             {
@@ -196,10 +203,11 @@ public:
                 case DATA_EXIT_GATE:
                     return _exitGateGUID;
             }
-            return 0;
+
+            return ObjectGuid::Empty;
         }
 
-        void Update(uint32 diff)
+        void Update(uint32 diff) override
         {
             if (_loadTimer)
             {
@@ -217,8 +225,7 @@ public:
                 {
                     if (!arthas->IsAlive())
                     {
-                        EnsureGridLoaded();
-                        arthas->setDeathState(DEAD);
+                        arthas->setDeathState(DeathState::Dead);
                         arthas->Respawn();
                     }
                     else
@@ -250,13 +257,12 @@ public:
                 if (divAfter == 0)
                 {
                     _guardianTimer = 0;
-                    DoUpdateWorldState(WORLDSTATE_TIME_GUARDIAN_SHOW, 0);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN_SHOW, 0);
 
                     // Inform infinite we run out of time
                     if (instance->IsHeroic() && _infiniteGUID)
                         if (Creature* cr = instance->GetCreature(_infiniteGUID))
                             cr->AI()->DoAction(ACTION_RUN_OUT_OF_TIME);
-
                 }
                 else if (div > divAfter)
                 {
@@ -265,7 +271,7 @@ public:
                     else if (divAfter == 1)
                         ChromieWhisper(2);
 
-                    DoUpdateWorldState(WORLDSTATE_TIME_GUARDIAN, divAfter);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_TIME_GUARDIAN, divAfter);
                     SaveToDB();
                 }
             }
@@ -285,7 +291,7 @@ public:
                     ChromieWhisper(0);
 
                     // hide crates count
-                    DoUpdateWorldState(WORLDSTATE_SHOW_CRATES, 0);
+                    DoUpdateWorldState(WORLD_STATE_CULLING_OF_STRATHOLME_SHOW_CRATES, 0);
                     _showCrateTimer = 0;
                     _encounterState = COS_PROGRESS_CRATES_FOUND;
                 }
@@ -294,11 +300,10 @@ public:
 
         void ChromieWhisper(uint8 textId)
         {
-            if (!instance->GetPlayers().isEmpty())
+            if (!instance->GetPlayers().IsEmpty())
                 if (Player* player = instance->GetPlayers().getFirst()->GetSource())
                 {
-                    Position pos;
-                    player->GetPosition(&pos);
+                    Position pos = player->GetPosition();
                     if (Creature* cr = instance->SummonCreature(NPC_CHROMIE_MIDDLE, pos))
                     {
                         cr->SetVisible(false);
@@ -347,17 +352,7 @@ public:
             }
         }
 
-        void EnsureGridLoaded()
-        {
-            instance->LoadGrid(LeaderIntroPos1.GetPositionX(), LeaderIntroPos1.GetPositionY());
-            instance->LoadGrid(LeaderIntroPos2.GetPositionX(), LeaderIntroPos2.GetPositionY());
-            instance->LoadGrid(LeaderIntroPos3.GetPositionX(), LeaderIntroPos3.GetPositionY());
-            instance->LoadGrid(LeaderIntroPos4.GetPositionX(), LeaderIntroPos4.GetPositionY());
-            instance->LoadGrid(LeaderIntroPos5.GetPositionX(), LeaderIntroPos5.GetPositionY());
-            instance->LoadGrid(LeaderIntroPos6.GetPositionX(), LeaderIntroPos6.GetPositionY());
-        }
-
-        std::string GetSaveData()
+        std::string GetSaveData() override
         {
             OUT_SAVE_INST_DATA;
 
@@ -368,7 +363,7 @@ public:
             return saveStream.str();
         }
 
-        void Load(const char* in)
+        void Load(const char* in) override
         {
             if (!in)
             {
@@ -400,12 +395,12 @@ public:
 
     private:
         // NPCs
-        uint64 _arthasGUID;
-        uint64 _infiniteGUID;
+        ObjectGuid _arthasGUID;
+        ObjectGuid _infiniteGUID;
 
         // GOs
-        uint64 _shkafGateGUID;
-        uint64 _exitGateGUID;
+        ObjectGuid _shkafGateGUID;
+        ObjectGuid _exitGateGUID;
         uint32 _encounterState;
         uint32 _crateCount;
         uint32 _showCrateTimer;

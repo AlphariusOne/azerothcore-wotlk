@@ -1,11 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "AreaDefines.h"
+#include "CreatureAI.h"
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
 #include "SpellScript.h"
-#include "CreatureAI.h"
+#include "SpellScriptLoader.h"
 #include "uldaman.h"
 
 enum Spells
@@ -22,20 +37,19 @@ enum Events
 class instance_uldaman : public InstanceMapScript
 {
 public:
-    instance_uldaman() : InstanceMapScript("instance_uldaman", 70) { }
+    instance_uldaman() : InstanceMapScript("instance_uldaman", MAP_ULDAMAN) { }
 
     struct instance_uldaman_InstanceMapScript : public InstanceScript
     {
         instance_uldaman_InstanceMapScript(Map* map) : InstanceScript(map) { }
 
-        void Initialize()
+        void Initialize() override
         {
+            SetHeaders(DataHeader);
             memset(&_encounters, 0, sizeof(_encounters));
-            archaedasTempleDoorGUID = 0;
-            ancientVaultDoorGUID = 0;
         }
 
-        void OnGameObjectCreate(GameObject* gameobject)
+        void OnGameObjectCreate(GameObject* gameobject) override
         {
             switch (gameobject->GetEntry())
             {
@@ -43,18 +57,18 @@ public:
                 case GO_KEYSTONE:
                     if (_encounters[DATA_IRONAYA_DOORS] == DONE)
                     {
-                        HandleGameObject(0, true, gameobject);
-                        gameobject->SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE);
+                        HandleGameObject(ObjectGuid::Empty, true, gameobject);
+                        gameobject->SetGameObjectFlag(GO_FLAG_NOT_SELECTABLE);
                     }
                     break;
                 case GO_TEMPLE_DOOR:
                     if (_encounters[DATA_STONE_KEEPERS] == DONE)
-                        HandleGameObject(0, true, gameobject);
+                        HandleGameObject(ObjectGuid::Empty, true, gameobject);
                     break;
                 case GO_ANCIENT_VAULT_DOOR:
                     ancientVaultDoorGUID = gameobject->GetGUID();
                     if (_encounters[DATA_ARCHAEDAS] == DONE)
-                        HandleGameObject(0, true, gameobject);
+                        HandleGameObject(ObjectGuid::Empty, true, gameobject);
                     break;
                 case GO_ARCHAEDAS_TEMPLE_DOOR:
                     archaedasTempleDoorGUID = gameobject->GetGUID();
@@ -62,7 +76,7 @@ public:
             }
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
             switch (type)
             {
@@ -81,34 +95,30 @@ public:
                 SaveToDB();
         }
 
-        std::string GetSaveData()
+        uint32 GetData(uint32 data) const override
         {
-            std::ostringstream saveStream;
-            saveStream << "U D " << _encounters[DATA_IRONAYA_DOORS] << ' ' << _encounters[DATA_STONE_KEEPERS] << ' ' << _encounters[DATA_ARCHAEDAS];
-            return saveStream.str();
-        }
-
-        void Load(const char* in)
-        {
-            if (!in)
-                return;
-
-            char dataHead1, dataHead2;
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2;
-
-            if (dataHead1 == 'U' && dataHead2 == 'D')
+            if (data < MAX_ENCOUNTERS)
             {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    loadStream >> _encounters[i];
-                    if (_encounters[i] == IN_PROGRESS)
-                        _encounters[i] = NOT_STARTED;
-                }
+                return _encounters[data];
             }
+            return 0;
         }
 
-        void OnCreatureCreate(Creature* creature)
+        void ReadSaveDataMore(std::istringstream& data) override
+        {
+            data >> _encounters[DATA_IRONAYA_DOORS];
+            data >> _encounters[DATA_STONE_KEEPERS];
+            data >> _encounters[DATA_ARCHAEDAS];
+        }
+
+        void WriteSaveDataMore(std::ostringstream& data) override
+        {
+            data << _encounters[DATA_IRONAYA_DOORS] << ' '
+                << _encounters[DATA_STONE_KEEPERS] << ' '
+                << _encounters[DATA_ARCHAEDAS];
+        }
+
+        void OnCreatureCreate(Creature* creature) override
         {
             switch (creature->GetEntry())
             {
@@ -121,120 +131,88 @@ public:
 
     private:
         uint32 _encounters[MAX_ENCOUNTERS];
-        uint64 archaedasTempleDoorGUID;
-        uint64 ancientVaultDoorGUID;
+        ObjectGuid archaedasTempleDoorGUID;
+        ObjectGuid ancientVaultDoorGUID;
     };
 
-    InstanceScript* GetInstanceScript(InstanceMap* map) const
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
         return new instance_uldaman_InstanceMapScript(map);
     }
 };
 
-class spell_uldaman_sub_boss_agro_keepers : public SpellScriptLoader
+class spell_uldaman_sub_boss_agro_keepers : public SpellScript
 {
-public:
-    spell_uldaman_sub_boss_agro_keepers() : SpellScriptLoader("spell_uldaman_sub_boss_agro_keepers") { }
+    PrepareSpellScript(spell_uldaman_sub_boss_agro_keepers);
 
-    class spell_uldaman_sub_boss_agro_keepers_SpellScript : public SpellScript
+    void HandleSendEvent(SpellEffIndex  /*effIndex*/)
     {
-        PrepareSpellScript(spell_uldaman_sub_boss_agro_keepers_SpellScript);
+        if (Creature* keeper = GetCaster()->FindNearestCreature(NPC_STONE_KEEPER, 100.0f, true))
+            keeper->AI()->SetData(1, 1);
+    }
 
-        void HandleSendEvent(SpellEffIndex  /*effIndex*/)
-        {
-            if (Creature* keeper = GetCaster()->FindNearestCreature(NPC_STONE_KEEPER, 100.0f, true))
-                keeper->AI()->SetData(1, 1);
-        }
-
-        void Register()
-        {
-            OnEffectLaunch += SpellEffectFn(spell_uldaman_sub_boss_agro_keepers_SpellScript::HandleSendEvent, EFFECT_0, SPELL_EFFECT_SEND_EVENT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void Register() override
     {
-        return new spell_uldaman_sub_boss_agro_keepers_SpellScript();
+        OnEffectLaunch += SpellEffectFn(spell_uldaman_sub_boss_agro_keepers::HandleSendEvent, EFFECT_0, SPELL_EFFECT_SEND_EVENT);
     }
 };
 
-class spell_uldaman_stoned : public SpellScriptLoader
+class spell_uldaman_stoned_aura : public AuraScript
 {
-public:
-    spell_uldaman_stoned() : SpellScriptLoader("spell_uldaman_stoned") { }
+    PrepareAuraScript(spell_uldaman_stoned_aura);
 
-    class spell_uldaman_stoned_AuraScript : public AuraScript
+    bool Load() override
     {
-        PrepareAuraScript(spell_uldaman_stoned_AuraScript);
+        return GetUnitOwner()->IsCreature() && GetUnitOwner()->GetMapId() == MAP_ULDAMAN;
+    }
 
-        bool Load()
-        {
-            return GetUnitOwner()->GetTypeId() == TYPEID_UNIT;
-        }
-
-        void HandleEffectApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            Creature* target = GetUnitOwner()->ToCreature();
-            target->SetReactState(REACT_PASSIVE);
-            target->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
-        }
-
-        void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            Creature* target = GetUnitOwner()->ToCreature();
-            target->SetReactState(REACT_AGGRESSIVE);
-            target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC);
-        }
-
-        void Register()
-        {
-            OnEffectApply += AuraEffectApplyFn(spell_uldaman_stoned_AuraScript::HandleEffectApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
-            OnEffectRemove += AuraEffectRemoveFn(spell_uldaman_stoned_AuraScript::HandleEffectRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void HandleEffectApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        return new spell_uldaman_stoned_AuraScript();
+        Creature* target = GetUnitOwner()->ToCreature();
+        target->SetReactState(REACT_PASSIVE);
+        target->SetImmuneToAll(true);
+    }
+
+    void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        Creature* target = GetUnitOwner()->ToCreature();
+        target->SetReactState(REACT_AGGRESSIVE);
+        target->SetImmuneToAll(false);
+    }
+
+    void Register() override
+    {
+        OnEffectApply += AuraEffectApplyFn(spell_uldaman_stoned_aura::HandleEffectApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        OnEffectRemove += AuraEffectRemoveFn(spell_uldaman_stoned_aura::HandleEffectRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
-class spell_uldaman_boss_agro_archaedas : public SpellScriptLoader
+class spell_uldaman_boss_agro_archaedas : public SpellScript
 {
-public:
-    spell_uldaman_boss_agro_archaedas() : SpellScriptLoader("spell_uldaman_boss_agro_archaedas") { }
+    PrepareSpellScript(spell_uldaman_boss_agro_archaedas);
 
-    class spell_uldaman_boss_agro_archaedas_SpellScript : public SpellScript
+    void HandleSendEvent(SpellEffIndex  /*effIndex*/)
     {
-        PrepareSpellScript(spell_uldaman_boss_agro_archaedas_SpellScript);
+        InstanceScript* instance = GetCaster()->GetInstanceScript();
 
-        void HandleSendEvent(SpellEffIndex  /*effIndex*/)
-        {
-            InstanceScript* instance = GetCaster()->GetInstanceScript();
-            if (!instance || instance->GetData(DATA_ARCHAEDAS) == IN_PROGRESS)
-                return;
+        if (!instance || instance->GetData(DATA_ARCHAEDAS) == IN_PROGRESS || instance->GetData(DATA_ARCHAEDAS) == DONE)
+            return;
 
-            instance->SetData(DATA_ARCHAEDAS, IN_PROGRESS);
-            if (Creature* archaedas = GetCaster()->FindNearestCreature(NPC_ARCHAEDAS, 100.0f, true))
-                archaedas->AI()->SetData(1, 1);
-        }
+        instance->SetData(DATA_ARCHAEDAS, IN_PROGRESS);
+        if (Creature* archaedas = GetCaster()->FindNearestCreature(NPC_ARCHAEDAS, 100.0f, true))
+            archaedas->AI()->SetData(1, 1);
+    }
 
-        void Register()
-        {
-            OnEffectLaunch += SpellEffectFn(spell_uldaman_boss_agro_archaedas_SpellScript::HandleSendEvent, EFFECT_0, SPELL_EFFECT_SEND_EVENT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void Register() override
     {
-        return new spell_uldaman_boss_agro_archaedas_SpellScript();
+        OnEffectLaunch += SpellEffectFn(spell_uldaman_boss_agro_archaedas::HandleSendEvent, EFFECT_0, SPELL_EFFECT_SEND_EVENT);
     }
 };
 
 void AddSC_instance_uldaman()
 {
     new instance_uldaman();
-    new spell_uldaman_sub_boss_agro_keepers();
-    new spell_uldaman_stoned();
-    new spell_uldaman_boss_agro_archaedas();
+    RegisterSpellScript(spell_uldaman_sub_boss_agro_keepers);
+    RegisterSpellScript(spell_uldaman_stoned_aura);
+    RegisterSpellScript(spell_uldaman_boss_agro_archaedas);
 }

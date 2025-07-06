@@ -1,35 +1,51 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `broadcast_text`
+--
+
 DROP TABLE IF EXISTS `broadcast_text`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `broadcast_text` 
-(
-  `ID` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `Language` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `MaleText` longtext,
-  `FemaleText` longtext,
-  `EmoteID0` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `EmoteID1` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `EmoteID2` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `EmoteDelay0` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `EmoteDelay1` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `EmoteDelay2` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `SoundId` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `Unk1` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `Unk2` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `VerifiedBuild` smallint(5) DEFAULT '0',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `broadcast_text` (
+  `ID` int unsigned NOT NULL DEFAULT '0',
+  `LanguageID` int DEFAULT NULL,
+  `MaleText` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `FemaleText` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `EmoteID1` int DEFAULT NULL,
+  `EmoteID2` int DEFAULT NULL,
+  `EmoteID3` int DEFAULT NULL,
+  `EmoteDelay1` int DEFAULT NULL,
+  `EmoteDelay2` int DEFAULT NULL,
+  `EmoteDelay3` int DEFAULT NULL,
+  `SoundEntriesId` int DEFAULT NULL,
+  `EmotesID` int DEFAULT NULL,
+  `Flags` int DEFAULT NULL,
+  `VerifiedBuild` smallint DEFAULT '0',
   PRIMARY KEY (`ID`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `broadcast_text`
+--
 
 LOCK TABLES `broadcast_text` WRITE;
 /*!40000 ALTER TABLE `broadcast_text` DISABLE KEYS */;
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (1,0,'Help help!  I\'m being repressed!','',0,0,0,0,0,0,0,0,6,18019),
 (3,0,'Company.. HALT!  ... Fall IN!','',0,0,0,0,0,0,0,0,1,18019),
 (4,0,'Forward.. MARCH!!','',0,0,0,0,0,0,0,0,1,18019),
@@ -6914,7 +6930,7 @@ INSERT INTO `broadcast_text` VALUES
 (8314,0,'With all due respect, Warchief - why not allow them to be destroyed? Does this not strengthen our position?\n','With all due respect, Warchief - why not allow them to be destroyed? Does this not strengthen our position?\n',0,0,0,0,0,0,0,0,1,18019),
 (8315,0,'<Thrall laughs.>$B$BSo much to learn still, $r.$B$BYou are too young to remember the wars and bloodshed of ages past. Too young to remember the burden of the curse carried by our people.$B$BOur position with the Alliance right now is a tenuous one. Skirmishes and smaller battles do take place, but there is peace - something our people have not known for millennia. Would you give this up and plunge us into the maw of chaos again but against a new foe? One that will not rest until we are all destroyed?','',1,6,6,0,0,0,0,0,1,18019),
 (8316,0,'I... I did not think of it that way, Warchief.','I... I did not think of it that way, Warchief.',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (8317,0,'No, $n, you did not. I do not fault you, however, as yours is a mind much like mine was as a youth: Impetuous, rebellious, and often without a single coherent thought! Traits I can no longer afford to express.$B$BEnough lamenting. $R, I have a task for you; one that you may not survive. ','',1,5,1,0,0,0,0,0,1,18019),
 (8318,0,'I live only to serve, Warchief! My life is empty and meaningless without your guidance.','I live only to serve, Warchief! My life is empty and meaningless without your guidance.',0,0,0,0,0,0,0,0,1,18019),
 (8319,0,'<Thrall laughs.>$B$BNoted... Now pay attention, $n. The Black Dragonflight brood mother, Onyxia, has been flushed out from her position of power in Stormwind. She has escaped, fleeing to her lair in Dustwallow Marsh.$B$BShe cannot be allowed to live in such close proximity to our capital cities. We must strike before being struck!$B$BI want her destroyed, $n. ','',11,1,5,0,0,0,0,0,1,18019),
@@ -8807,7 +8823,8 @@ INSERT INTO `broadcast_text` VALUES
 (10239,0,'How many of our Lieutenants are alive, Vanndar?','How many of our Lieutenants are alive, Vanndar?',0,0,0,0,0,0,0,0,1,18019),
 (10240,0,'$950w, soldier.','',0,0,0,0,0,0,0,0,1,18019),
 (10241,0,'How many Frostwolf Officers are alive, Vanndar?','How many Frostwolf Officers are alive, Vanndar?',0,0,0,0,0,0,0,0,1,18019),
-(10242,0,'$966w Frostwolf Commander(s) and $964w Frostwolf Lieutenant(s), soldier.','',1,0,0,0,0,0,0,0,1,18019),
+(10242,0,'$966w Frostwolf Commander(s) and $964w Frostwolf Lieutenant(s),
+ soldier.','',1,0,0,0,0,0,0,0,1,18019),
 (10243,0,'Soldiers of Stormpike, your General is under attack! I require aid! Come! Come! Slay these mangy Frostwolf dogs.','',0,0,0,0,0,0,0,0,1,18019),
 (10245,0,'Stormpike filth! In my keep?! Slay them all!','',0,0,0,0,0,0,0,0,1,18019),
 (10249,1,'Hmmm... Where is my fishing hook? Oh, there it is.','',16,0,0,0,0,0,0,0,1,18019),
@@ -13622,7 +13639,7 @@ INSERT INTO `broadcast_text` VALUES
 (15273,0,'Skinning','Skinning',0,0,0,0,0,0,0,0,1,18019),
 (15274,0,'Tyn is quite the talented skinner; she produces the finest lynx hides I\'ve yet seen. If you wish to learn from her, you\'ll find her on the southeast end of the Walk of Elders.','Tyn is quite the talented skinner; she produces the finest lynx hides I\'ve yet seen. If you wish to learn from her, you\'ll find her on the southeast end of the Walk of Elders.',0,0,0,0,0,0,0,0,1,18019),
 (15275,0,'Tailoring','Tailoring',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (15276,0,'The tailor Keelen is always seeking more curious students to teach his delicate craft. His shop is somewhat difficult to uncover at first, but it\'s just north of the auction house in the Bazaar. You\'ll find him on the lower level of the building.','The tailor Keelen is always seeking more curious students to teach his delicate craft. His shop is somewhat difficult to uncover at first, but it\'s just north of the auction house in the Bazaar. You\'ll find him on the lower level of the building.',0,0,0,0,0,0,0,0,1,18019),
 (15277,0,'TESTING. IS THIS THING WORKING????','TESTING. IS THIS THING WORKING????',0,0,0,0,0,0,0,0,1,18019),
 (15278,0,'In Nagrand, food hunt ogre!','',0,0,0,0,0,0,0,0,1,18019),
@@ -19774,7 +19791,8 @@ INSERT INTO `broadcast_text` VALUES
 (21528,0,'I\'m ready for Mount Hyjal, Jimmy. Teleport me!','I\'m ready for Mount Hyjal, Jimmy. Teleport me!',0,0,0,0,0,0,0,0,1,18019),
 (21529,0,'We\'re currently focus testing The Black Temple. You must have at least HONORED reputation with the Violet Eye to participate.$B$BThat\'s the reputation you gain while doing Karazhan.','',396,396,0,0,0,0,0,0,1,18019),
 (21530,0,'I wish to purchase the key to the Black Temple and some phat lewtz.','I wish to purchase the key to the Black Temple and some phat lewtz.',0,0,0,0,0,0,0,0,1,18019),
-(21531,0,'Now that you have your Black Temple key (Medallion of Karabor), I can teleport you directly to the Black Temple. Just tell me when you are ready.','',1,0,0,0,0,0,0,0,1,18019),
+(21531,0,'Now that you have your Black Temple key (Medallion of Karabor),
+ I can teleport you directly to the Black Temple. Just tell me when you are ready.','',1,0,0,0,0,0,0,0,1,18019),
 (21532,0,'I\'m ready to go to the Black Temple, Johnny.','I\'m ready to go to the Black Temple, Johnny.',0,0,0,0,0,0,0,0,1,18019),
 (21533,0,'Welcome friend! What would you like to see?','',396,0,0,1,0,0,0,0,1,18019),
 (21534,0,'Greetings $G brother:sister;. How can we be of service?','',396,0,0,1,0,0,0,0,1,18019),
@@ -21595,7 +21613,7 @@ INSERT INTO `broadcast_text` VALUES
 (23363,7,'Hey! Did you eat the last of the chicken? I was saving that for a special occasion!','Hey! Did you eat the last of the chicken? I was saving that for a special occasion!',0,0,0,0,0,0,0,0,1,18019),
 (23364,0,'For the Alliance! Wait... the Horde! Wait... which was I again?','For the Alliance! Wait... the Horde! Wait... which was I again?',0,0,0,0,0,0,0,0,1,18019),
 (23365,0,'For the Horde! No... the Alliance! Uh... which mask did I have?','For the Horde! No... the Alliance! Uh... which mask did I have?',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (23366,7,'You be sayin\' that now, but come dinner you\'ll think differently!','You be sayin\' that now, but come dinner you\'ll think differently!',0,0,0,0,0,0,0,0,1,18019),
 (23367,7,'I wouldn\'t eat yer leftovers if the only other thing to eat was rubble!','I wouldn\'t eat yer leftovers if the only other thing to eat was rubble!',0,0,0,0,0,0,0,0,1,18019),
 (23368,7,'Alright, now follow me, girl.','Alright, now follow me, girl.',0,0,0,0,0,0,0,0,1,18019),
@@ -30150,7 +30168,7 @@ INSERT INTO `broadcast_text` VALUES
 (32047,0,'They will not.','',0,0,0,0,0,0,0,0,1,18019),
 (32048,0,'','Come to me, $n.',0,0,0,0,0,0,0,0,1,18019),
 (32049,0,'I... recede.','',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (32050,0,'I AM a force of nature!','',0,0,0,0,0,0,0,0,1,18019),
 (32051,0,'I SHALL pass!','',0,0,0,0,0,0,0,0,1,18019),
 (32052,0,'You cannot stop the tide!','',0,0,0,0,0,0,0,0,1,18019),
@@ -38345,7 +38363,7 @@ INSERT INTO `broadcast_text` VALUES
 (40468,0,'|cFFFF2222Bloodthirsty Shark goes into a feeding frenzy!|r','',0,0,0,0,0,0,0,0,1,18019),
 (40469,0,'Fizzle, Pozzik, Jinky... they all think that they saved us. But it was me! I built the ship!$B$BIt should be called, Razzeric\'s Speedbarge!','',5,0,0,0,0,0,0,0,1,18019),
 (40470,0,'What?  I\'ll show that pipsqueak!','',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (40471,0,'Vol\'jin told me ta keep hittin\' da drum till he gets back.  If ya be waitin\' for him, he\'d be back soon to take back da Isles.$B$BJust wait here and enjoy da music!','',0,0,0,0,0,0,0,0,1,18019),
 (40472,0,'Vol\'jin be waitin for ya.  You should talk wit him now, my arms are gettin\' tired.$B$BDis echo isle attack betta be startin\' soon. ','',0,0,0,0,0,0,0,0,1,18019),
 (40473,0,'Where?!  Where is he?','',0,0,0,0,0,0,0,0,1,18019),
@@ -47058,7 +47076,7 @@ INSERT INTO `broadcast_text` VALUES
 (49412,0,'Now that was really unnecessary.','',0,0,0,0,0,0,20087,0,1,18019),
 (49413,0,'Impressive. You have managed to destroy one of my most horrific creations, a task I had thought impossible until now.','',0,0,0,0,0,0,20088,0,1,18019),
 (49414,0,'We never did see eye to eye... Good riddance I say!','',0,0,0,0,0,0,20089,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (49415,0,'Welcome to my personal sanctum, heroes! I hope you find the accommodations to your liking. Herein you will find many of my failed experiments and ultimately my greatest triumph!','',0,0,0,0,0,0,20090,0,1,18019),
 (49416,0,'Behold the brood mother, Onyxia, REBORN! Perhaps my finest work.','',0,0,0,0,0,0,20070,22,1,18019),
 (49417,0,'My dearest sibling, do you hunger? THEN FEAST UPON OUR ENEMIES!','',0,0,0,0,0,0,20071,22,1,18019),
@@ -56044,7 +56062,7 @@ INSERT INTO `broadcast_text` VALUES
 (58814,0,'%s is dismounted from his gryphon.','',0,0,0,0,0,0,0,0,1,18019),
 (58815,0,'<Jogu squints at you.>$B$BHey, do I know you?','',0,0,0,0,0,0,0,0,1,18019),
 (58816,0,'Heeey buddy! Nice to see you again!$B$BBuuuuuuuuuuuuuuurrrrpppp!','',0,0,0,0,0,0,0,0,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (58817,0,'My friend come to visit Jogu again? What can I do for you today?','',0,0,0,0,0,0,0,0,1,18019),
 (58818,0,'You are a good friend, $n. Maybe my only friend.','',0,0,0,0,0,0,0,0,1,18019),
 (58819,0,'Hey $Gbrother:sister;! You come to ask Jogu for wishdom?','',0,0,0,0,0,0,0,0,1,18019),
@@ -57525,7 +57543,7 @@ INSERT INTO `broadcast_text` VALUES
 (60337,0,'We will save him, Suna. I promise.','',0,0,0,0,0,0,30596,0,1,18019),
 (60338,0,'And the greatest losses.','',0,0,0,0,0,0,0,0,1,18019),
 (60339,0,'You throw caution to the wind.','',0,0,0,0,0,0,0,0,1,18019),
-(60340,0,'What happened to Lin� it was no one�s fault.','',0,0,0,0,0,0,0,0,1,18019),
+(60340,0,'What happened to Linï¿½ it was no oneï¿½s fault.','',0,0,0,0,0,0,0,0,1,18019),
 (60341,0,'He is gone. We must all move on.','',0,0,0,0,0,0,0,0,1,18019),
 (60342,0,'I\'m heading to the wound. Try to keep these beasts off of me.','I\'m heading to the wound. Try to keep these beasts off of me.',0,0,0,0,0,0,0,396,1,18019),
 (60343,0,'You\'re a life-saver. I\'ll do everything I can to heal the wound.','You\'re a life-saver. I\'ll do everything I can to heal the wound.',0,0,0,0,0,0,0,396,1,18019),
@@ -62669,7 +62687,7 @@ INSERT INTO `broadcast_text` VALUES
 (65537,0,'|TInterface\\Icons\\inv_elemental_primal_air.blp:20|tMing the Cunning summons a |cFFFF0000|Hspell:119981|h[Whirling Dervish]|h|r!','',0,0,0,0,0,0,0,15,1,18019),
 (65538,0,'|TInterface\\Icons\\spell_druid_ursolsvortex.blp:20|tMing the Cunning creates a |cFFFF0000|Hspell:120099|h[Magnetic Field]|h|r!','',0,0,0,0,0,0,0,15,1,18019),
 (65539,0,'|TInterface\\Icons\\ability_warrior_savageblow.blp:20|tHaiyan the Unstoppable strikes |cFFFF0000$n|r with a |cFFFF0000|Hspell:123655|h[Traumatic Blow]|h|r!','',0,0,0,0,0,0,0,15,1,18019),
-(65540,0,'We are all here. This is a historic moment, $n. My dying wife envisioned a city of light beyond these gates� What do you think we will find?','',6,0,0,0,0,0,0,0,1,18019),
+(65540,0,'We are all here. This is a historic moment, $n. My dying wife envisioned a city of light beyond these gatesï¿½ What do you think we will find?','',6,0,0,0,0,0,0,0,1,18019),
 (65541,0,'Haiyan the Unstoppable struck you with a |cFFFF0000|Hspell:123655|h[Traumatic Blow]|h|r! Healing abilities used on you will be less efficient while the effect persists!','',0,0,0,0,0,0,0,15,1,18019),
 (65542,0,'There\'s only one way to find out...','There\'s only one way to find out...',5,0,0,0,0,0,0,0,1,18019),
 (65543,0,'|TInterface\\Icons\\spell_fire_meteorstorm.blp:20|tHaiyan the Unstoppable targets |cFFFF0000$n|r with a |cFFFF0000|Hspell:120195|h[Meteor]|h|r!','',0,0,0,0,0,0,0,15,1,18019),
@@ -62931,7 +62949,7 @@ INSERT INTO `broadcast_text` VALUES
 (65800,0,'','That\'s NOT going to happen.',0,0,0,0,0,0,0,0,1,18019),
 (65801,0,'','Destroy them!',0,0,0,0,0,0,0,0,1,18019),
 (65802,0,'','They are falling! Don\'t stop now!',0,0,0,0,0,0,0,0,1,18019),
-(65803,0,'','Good work! You�re quite a fighter.',0,0,0,0,0,0,0,0,1,18019),
+(65803,0,'','Good work! Youï¿½re quite a fighter.',0,0,0,0,0,0,0,0,1,18019),
 (65804,0,'','I love the feeling after a good fight.',0,0,0,0,0,0,0,0,1,18019),
 (65805,0,'','Let\'s celebrate!',0,0,0,0,0,0,0,0,1,18019),
 (65806,0,'Keep them back!  They will not delve into our secrets!','',0,0,0,0,0,0,0,0,1,18019),
@@ -65040,7 +65058,7 @@ INSERT INTO `broadcast_text` VALUES
 (67946,0,'','Red Crane bless you all. Goodnight!',0,0,0,0,0,0,0,2,1,18019),
 (67947,0,'Hey look, someone\'s coming up the road. Hellooooo Farmer Fung! Nice to see you!','',0,0,0,0,0,0,0,3,1,18019),
 (67948,0,'Well met, Farmer Yoon. I had to come by and see your farm for myself.','',0,0,0,0,0,0,0,3,1,18019);
-INSERT INTO `broadcast_text` VALUES 
+INSERT INTO `broadcast_text` VALUES
 (67949,0,'|TInterface\\Icons\\inv_polearm_2h_mantid_01.blp:20|t%s casts |cFFFF0000|Hspell:131320|h[Empower Blades]|h|r Run!','',0,0,0,0,0,0,0,0,1,18019),
 (67950,0,'Not too shabby. Looks like you\'ve got room for more fields there, too.','',0,0,0,0,0,0,0,0,1,18019),
 (67951,0,'Here\'s a tip from one farmer to another. There are lots of upgrades to buy at Halfhill Market. Gina Mudclaw sells tools, and Merchant Greenfield sells seeds.','',0,0,0,0,0,0,0,1,1,18019),
@@ -73079,10 +73097,14 @@ INSERT INTO `broadcast_text` VALUES
 (77865,0,'|TInterface\\Icons\\achievement_arena_2v2_5:20|t$n has agreed to begin the encounter. Additional players required to begin: $8589w.','',0,0,0,0,0,0,0,0,1,18019);
 /*!40000 ALTER TABLE `broadcast_text` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:33:18
 

@@ -1,49 +1,54 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "AreaBoundary.h"
+#include "CreatureAIImpl.h"
+#include "InstanceMapScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "obsidian_sanctum.h"
-#include "Player.h"
+
+BossBoundaryData const boundaries =
+{
+    { DATA_SARTHARION, new RectangleBoundary(3218.86f, 3275.69f, 484.68f, 572.4f) }
+};
 
 class instance_obsidian_sanctum : public InstanceMapScript
 {
 public:
-    instance_obsidian_sanctum() : InstanceMapScript("instance_obsidian_sanctum", 615) { }
+    instance_obsidian_sanctum() : InstanceMapScript("instance_obsidian_sanctum", MAP_THE_OBSIDIAN_SANCTUM) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* pMap) const
+    InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
         return new instance_obsidian_sanctum_InstanceMapScript(pMap);
     }
 
     struct instance_obsidian_sanctum_InstanceMapScript : public InstanceScript
     {
-        instance_obsidian_sanctum_InstanceMapScript(Map* pMap) : InstanceScript(pMap),
-            m_uiSartharionGUID(0),
-            m_uiTenebronGUID(0),
-            m_uiShadronGUID(0),
-            m_uiVesperonGUID(0),
-            m_uiPortalGUID(0),
-            portalCount(0)
+        instance_obsidian_sanctum_InstanceMapScript(Map* pMap) : InstanceScript(pMap), portalCount(0)
         {
+            SetHeaders(DataHeader);
             SetBossNumber(MAX_ENCOUNTERS);
-        }
-
-        bool IsEncounterInProgress() const override
-        {
-            for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-            {
-                if (GetBossState(i) == IN_PROGRESS)
-                    return true;
-            }
-
-            return false;
+            LoadBossBoundaries(boundaries);
         }
 
         void OnCreatureCreate(Creature* pCreature) override
         {
-            switch(pCreature->GetEntry())
+            switch (pCreature->GetEntry())
             {
                 case NPC_SARTHARION:
                     m_uiSartharionGUID = pCreature->GetGUID();
@@ -60,9 +65,9 @@ public:
             }
         }
 
-        uint64 GetData64(uint32 uiData) const override
+        ObjectGuid GetGuidData(uint32 uiData) const override
         {
-            switch(uiData)
+            switch (uiData)
             {
                 case DATA_SARTHARION:
                     return m_uiSartharionGUID;
@@ -73,12 +78,13 @@ public:
                 case DATA_VESPERON:
                     return m_uiVesperonGUID;
             }
-            return 0;
+
+            return ObjectGuid::Empty;
         }
 
         bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const* source, Unit const*  /*target*/, uint32  /*miscvalue1*/) override
         {
-            switch(criteria_id)
+            switch (criteria_id)
             {
                 // Gonna Go When the Volcano Blows (10 player) (2047)
                 case 7326:
@@ -86,7 +92,7 @@ public:
                 case 7327:
                 {
                     Creature const* sartharion = instance->GetCreature(m_uiSartharionGUID);
-                    return sartharion && !sartharion->AI()->GetData(source->GetGUIDLow());
+                    return sartharion && !sartharion->AI()->GetData(source->GetGUID().GetCounter());
                 }
                 // Less Is More (10 player) (624)
                 case 7189:
@@ -133,20 +139,6 @@ public:
             return false;
         }
 
-        bool SetBossState(uint32 type, EncounterState state) override
-        {
-            if (InstanceScript::SetBossState(type, state))
-            {
-                return false;
-            }
-
-            if (state == DONE)
-            {
-                SaveToDB();
-            }
-            return true;
-        }
-
         void DoAction(int32 action) override
         {
             switch (action)
@@ -181,61 +173,19 @@ public:
                         }
 
                         DoRemoveAurasDueToSpellOnPlayers(SPELL_TWILIGHT_SHIFT);
-                        m_uiPortalGUID = 0;
+                        m_uiPortalGUID.Clear();
                     }
                     break;
                 }
             }
         }
 
-        std::string GetSaveData() override
-        {
-            OUT_SAVE_INST_DATA;
-
-            std::ostringstream saveStream;
-            saveStream << "O S " << GetBossSaveData();
-
-            OUT_SAVE_INST_DATA_COMPLETE;
-            return saveStream.str();
-        }
-
-        void Load(const char* strIn) override
-        {
-            if (!strIn)
-            {
-                OUT_LOAD_INST_DATA_FAIL;
-                return;
-            }
-
-            OUT_LOAD_INST_DATA(strIn);
-
-            char dataHead1, dataHead2;
-
-            std::istringstream loadStream(strIn);
-            loadStream >> dataHead1 >> dataHead2;
-
-            if (dataHead1 == 'O' && dataHead2 == 'S')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    uint32 temp;
-                    loadStream >> temp;
-                    if (temp == IN_PROGRESS)
-                        temp = NOT_STARTED;
-
-                    SetBossState(i, static_cast<EncounterState>(temp));
-                }
-            }
-
-            OUT_LOAD_INST_DATA_COMPLETE;
-        }
-
     private:
-        uint64 m_uiSartharionGUID;
-        uint64 m_uiTenebronGUID;
-        uint64 m_uiShadronGUID;
-        uint64 m_uiVesperonGUID;
-        uint64 m_uiPortalGUID;
+        ObjectGuid m_uiSartharionGUID;
+        ObjectGuid m_uiTenebronGUID;
+        ObjectGuid m_uiShadronGUID;
+        ObjectGuid m_uiVesperonGUID;
+        ObjectGuid m_uiPortalGUID;
         uint8 portalCount;
     };
 };

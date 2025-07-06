@@ -1,12 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "PathCommon.h"
 #include "MapBuilder.h"
+#include "PathCommon.h"
 #include "Timer.h"
+#include "Util.h"
+#include <boost/filesystem.hpp>
 
 using namespace MMAP;
 
@@ -30,8 +43,7 @@ bool checkDirectories(bool debugOutput)
     dirFiles.clear();
     if (getDirContents(dirFiles, "mmaps") == LISTFILE_DIRECTORY_NOT_FOUND)
     {
-        printf("'mmaps' directory does not exist\n");
-        return false;
+        return boost::filesystem::create_directory("mmaps");
     }
 
     dirFiles.clear();
@@ -231,8 +243,8 @@ int main(int argc, char** argv)
 {
     unsigned int threads = std::thread::hardware_concurrency();
     int mapnum = -1;
-    float maxAngle = 60.0f;
     int tileX = -1, tileY = -1;
+    float maxAngle = 60.0f;
     bool skipLiquid = false,
          skipContinents = false,
          skipJunkMaps = true,
@@ -267,7 +279,7 @@ int main(int argc, char** argv)
         return silent ? -3 : finish("Press ENTER to close...", -3);
 
     MapBuilder builder(maxAngle, skipLiquid, skipContinents, skipJunkMaps,
-                       skipBattlegrounds, debugOutput, bigBaseUnit, offMeshInputPath);
+                       skipBattlegrounds, debugOutput, bigBaseUnit, mapnum, offMeshInputPath, threads);
 
     uint32 start = getMSTime();
     if (file)
@@ -275,11 +287,11 @@ int main(int argc, char** argv)
     else if (tileX > -1 && tileY > -1 && mapnum >= 0)
         builder.buildSingleTile(mapnum, tileX, tileY);
     else if (mapnum >= 0)
-        builder.buildMap(uint32(mapnum));
+        builder.buildMaps(uint32(mapnum));
     else
-        builder.buildAllMaps(threads);
+        builder.buildMaps({});
 
     if (!silent)
-        printf("Finished. MMAPS were built in %u ms!\n", GetMSTimeDiffToNow(start));
+        printf("Finished. MMAPS were built in %s\n", secsToTimeString(GetMSTimeDiffToNow(start) / 1000).c_str());
     return 0;
 }

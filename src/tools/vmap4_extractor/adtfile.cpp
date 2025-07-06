@@ -1,13 +1,22 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "vmapexport.h"
 #include "adtfile.h"
-
-#include <algorithm>
+#include "vmapexport.h"
 #include <cstdio>
 
 #ifdef WIN32
@@ -32,27 +41,32 @@ char* GetPlainName(char* FileName)
     return FileName;
 }
 
-void fixnamen(char* name, size_t len)
+void fixnamen(char* name, std::size_t len)
 {
-    for (size_t i = 0; i < len - 3; i++)
+    if (len < 3)
+        return;
+
+    for (std::size_t i = 0; i < len - 3; i++)
     {
         if (i > 0 && name[i] >= 'A' && name[i] <= 'Z' && isalpha(name[i - 1]))
             name[i] |= 0x20;
         else if ((i == 0 || !isalpha(name[i - 1])) && name[i] >= 'a' && name[i] <= 'z')
             name[i] &= ~0x20;
     }
+
     //extension in lowercase
-    for (size_t i = len - 3; i < len; i++)
+    for (std::size_t i = len - 3; i < len; i++)
         name[i] |= 0x20;
 }
 
-void fixname2(char* name, size_t len)
+void fixname2(char* name, std::size_t len)
 {
-    for (size_t i = 0; i < len - 3; i++)
-    {
+    if (len < 3)
+        return;
+
+    for (std::size_t i = 0; i < len - 3; i++)
         if (name[i] == ' ')
             name[i] = '_';
-    }
 }
 
 char* GetExtension(char* FileName)
@@ -62,33 +76,17 @@ char* GetExtension(char* FileName)
     return nullptr;
 }
 
-ADTFile::ADTFile(char* filename): ADT(filename), nWMO(0), nMDX(0), WmoInstansName(nullptr), ModelInstansName(nullptr)
+ADTFile::ADTFile(char* filename): _file(filename)
 {
     Adtfilename.append(filename);
 }
 
 bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
 {
-    if (ADT.isEof ())
+    if (_file.isEof())
         return false;
 
     uint32 size;
-
-    string xMap;
-    string yMap;
-
-    Adtfilename.erase(Adtfilename.find(".adt"), 4);
-    string TempMapNumber;
-    TempMapNumber = Adtfilename.substr(Adtfilename.length() - 6, 6);
-    xMap = TempMapNumber.substr(TempMapNumber.find("_") + 1, (TempMapNumber.find_last_of("_") - 1) - (TempMapNumber.find("_")));
-    yMap = TempMapNumber.substr(TempMapNumber.find_last_of("_") + 1, (TempMapNumber.length()) - (TempMapNumber.find_last_of("_")));
-    Adtfilename.erase((Adtfilename.length() - xMap.length() - yMap.length() - 2), (xMap.length() + yMap.length() + 2));
-    //string AdtMapNumber = xMap + ' ' + yMap + ' ' + GetPlainName((char*)Adtfilename.c_str());
-    //printf("Processing map %s...\n", AdtMapNumber.c_str());
-    //printf("MapNumber = %s\n", TempMapNumber.c_str());
-    //printf("xMap = %s\n", xMap.c_str());
-    //printf("yMap = %s\n", yMap.c_str());
-
     std::string dirname = std::string(szWorkDirWmo) + "/dir_bin";
     FILE* dirfile;
     dirfile = fopen(dirname.c_str(), "ab");
@@ -98,15 +96,15 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
         return false;
     }
 
-    while (!ADT.isEof())
+    while (!_file.isEof())
     {
         char fourcc[5];
-        ADT.read(&fourcc, 4);
-        ADT.read(&size, 4);
+        _file.read(&fourcc, 4);
+        _file.read(&size, 4);
         flipcc(fourcc);
         fourcc[4] = 0;
 
-        size_t nextpos = ADT.getPos() + size;
+        std::size_t nextpos = _file.getPos() + size;
 
         if (!strcmp(fourcc, "MCIN"))
         {
@@ -119,17 +117,15 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
             if (size)
             {
                 char* buf = new char[size];
-                ADT.read(buf, size);
+                _file.read(buf, size);
                 char* p = buf;
-                int t = 0;
-                ModelInstansName = new string[size];
                 while (p < buf + size)
                 {
                     fixnamen(p, strlen(p));
                     char* s = GetPlainName(p);
                     fixname2(s, strlen(s));
 
-                    ModelInstansName[t++] = s;
+                    ModelInstanceNames.emplace_back(s);
 
                     string path(p);
                     ExtractSingleModel(path);
@@ -144,17 +140,20 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
             if (size)
             {
                 char* buf = new char[size];
-                ADT.read(buf, size);
+                _file.read(buf, size);
                 char* p = buf;
-                int q = 0;
-                WmoInstansName = new string[size];
                 while (p < buf + size)
                 {
+                    std::string path(p);
+
                     char* s = GetPlainName(p);
                     fixnamen(s, strlen(s));
                     fixname2(s, strlen(s));
+                    WmoInstanceNames.emplace_back(s);
+
+                    ExtractSingleWmo(path);
+
                     p += strlen(p) + 1;
-                    WmoInstansName[q++] = s;
                 }
                 delete[] buf;
             }
@@ -164,39 +163,38 @@ bool ADTFile::init(uint32 map_num, uint32 tileX, uint32 tileY)
         {
             if (size)
             {
-                nMDX = (int)size / 36;
-                for (int i = 0; i < nMDX; ++i)
+                uint32 doodadCount = size / sizeof(ADT::MDDF);
+                for (uint32 i = 0; i < doodadCount; ++i)
                 {
-                    uint32 id;
-                    ADT.read(&id, 4);
-                    ModelInstance inst(ADT, ModelInstansName[id].c_str(), map_num, tileX, tileY, dirfile);
+                    ADT::MDDF doodadDef;
+                    _file.read(&doodadDef, sizeof(ADT::MDDF));
+                    Doodad::Extract(doodadDef, ModelInstanceNames[doodadDef.Id].c_str(), map_num, tileX, tileY, dirfile);
                 }
-                delete[] ModelInstansName;
             }
         }
         else if (!strcmp(fourcc, "MODF"))
         {
             if (size)
             {
-                nWMO = (int)size / 64;
-                for (int i = 0; i < nWMO; ++i)
+                uint32 mapObjectCount = size / sizeof(ADT::MODF);
+                for (uint32 i = 0; i < mapObjectCount; ++i)
                 {
-                    uint32 id;
-                    ADT.read(&id, 4);
-                    WMOInstance inst(ADT, WmoInstansName[id].c_str(), map_num, tileX, tileY, dirfile);
+                    ADT::MODF mapObjDef;
+                    _file.read(&mapObjDef, sizeof(ADT::MODF));
+                    MapObject::Extract(mapObjDef, WmoInstanceNames[mapObjDef.Id].c_str(), map_num, tileX, tileY, dirfile);
+                    Doodad::ExtractSet(WmoDoodads[WmoInstanceNames[mapObjDef.Id]], mapObjDef, map_num, tileX, tileY, dirfile);
                 }
-                delete[] WmoInstansName;
             }
         }
         //======================
-        ADT.seek(nextpos);
+        _file.seek(nextpos);
     }
-    ADT.close();
+    _file.close();
     fclose(dirfile);
     return true;
 }
 
 ADTFile::~ADTFile()
 {
-    ADT.close();
+    _file.close();
 }

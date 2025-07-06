@@ -1,24 +1,40 @@
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
+-- MySQL dump 10.13  Distrib 8.0.34, for Win64 (x86_64)
+--
+-- Host: 127.0.0.1    Database: acore_world
+-- ------------------------------------------------------
+-- Server version	8.0.34
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `game_event_creature_quest`
+--
+
 DROP TABLE IF EXISTS `game_event_creature_quest`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `game_event_creature_quest` 
-(
-  `eventEntry` tinyint(3) unsigned NOT NULL COMMENT 'Entry of the game event.',
-  `id` mediumint(8) unsigned NOT NULL DEFAULT '0',
-  `quest` mediumint(8) unsigned NOT NULL DEFAULT '0',
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `game_event_creature_quest` (
+  `eventEntry` tinyint unsigned NOT NULL COMMENT 'Entry of the game event.',
+  `id` int unsigned NOT NULL DEFAULT '0',
+  `quest` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`,`quest`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `game_event_creature_quest`
+--
 
 LOCK TABLES `game_event_creature_quest` WRITE;
 /*!40000 ALTER TABLE `game_event_creature_quest` DISABLE KEYS */;
-INSERT INTO `game_event_creature_quest` VALUES 
+INSERT INTO `game_event_creature_quest` VALUES
 (8,279,9025),
 (8,5204,8980),
 (12,6740,8356),
@@ -42,6 +58,8 @@ INSERT INTO `game_event_creature_quest` VALUES
 (10,14444,5502),
 (10,14450,1468),
 (10,14451,172),
+(6,15732,8860),
+(6,15732,8861),
 (1,16817,9365),
 (1,16817,11964),
 (1,16818,9339),
@@ -111,8 +129,6 @@ INSERT INTO `game_event_creature_quest` VALUES
 (10,22818,10966),
 (10,22819,10942),
 (10,22819,10943),
-(24,23710,13932),
-(24,24495,13931),
 (1,25324,11891),
 (1,25324,12012),
 (1,25697,11691),
@@ -227,16 +243,6 @@ INSERT INTO `game_event_creature_quest` VALUES
 (10,33533,13959),
 (10,34365,13926),
 (10,34365,13927),
-(51,34435,13952),
-(51,34476,14174),
-(51,34477,14175),
-(51,34478,14167),
-(51,34479,14170),
-(51,34480,14176),
-(51,34481,14168),
-(51,34482,14177),
-(51,34483,14171),
-(51,34484,14169),
 (61,39654,25445),
 (61,40184,25444),
 (61,40184,25446),
@@ -246,10 +252,14 @@ INSERT INTO `game_event_creature_quest` VALUES
 (61,40391,25480);
 /*!40000 ALTER TABLE `game_event_creature_quest` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2024-12-17 22:33:47
 

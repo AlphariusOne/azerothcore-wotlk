@@ -1,10 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "AchievementCriteriaScript.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
+#include "SpellScriptLoader.h"
 #include "drak_tharon_keep.h"
+#include "SpellScript.h"
 
 enum Yells
 {
@@ -72,51 +88,54 @@ public:
         {
         }
 
-        void Reset()
+        void Reset() override
         {
             BossAI::Reset();
             instance->SetBossState(DATA_NOVOS_CRYSTALS, IN_PROGRESS);
             instance->SetBossState(DATA_NOVOS_CRYSTALS, NOT_STARTED);
-            _crystalCounter = _summonTargetRightGUID = _summonTargetLeftGUID = _stage = 0;
+            _crystalCounter = 0;
+            _summonTargetRightGUID.Clear();
+            _summonTargetLeftGUID.Clear();
+            _stage = 0;
 
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE);
-            me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-            me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            me->SetUnitFlag(UNIT_FLAG_DISABLE_MOVE);
+            me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
 
             _achievement = true;
         }
 
-        uint32 GetData(uint32 data) const
+        uint32 GetData(uint32 data) const override
         {
             if (data == me->GetEntry())
                 return uint32(_achievement);
             return 0;
         }
 
-        void SetData(uint32 type, uint32)
+        void SetData(uint32 type, uint32) override
         {
             if (type == me->GetEntry())
                 _achievement = false;
         }
 
-        void MoveInLineOfSight(Unit*  /*who*/) { }
+        void MoveInLineOfSight(Unit*  /*who*/) override { }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
             Talk(SAY_AGGRO);
-            BossAI::EnterCombat(who);
+            BossAI::JustEngagedWith(who);
 
-            events.ScheduleEvent(EVENT_SUMMON_FETID_TROLL, 3000);
-            events.ScheduleEvent(EVENT_SUMMON_SHADOWCASTER, 9000);
-            events.ScheduleEvent(EVENT_SUMMON_HULKING_CORPSE, 30000);
-            events.ScheduleEvent(EVENT_SUMMON_CRYSTAL_HANDLER, 20000);
-            events.ScheduleEvent(EVENT_CHECK_PHASE, 80000);
+            events.ScheduleEvent(EVENT_SUMMON_FETID_TROLL, 3s);
+            events.ScheduleEvent(EVENT_SUMMON_SHADOWCASTER, 9s);
+            events.ScheduleEvent(EVENT_SUMMON_HULKING_CORPSE, 30s);
+            events.ScheduleEvent(EVENT_SUMMON_CRYSTAL_HANDLER, 20s);
+            events.ScheduleEvent(EVENT_CHECK_PHASE, 80s);
 
             me->CastSpell(me, SPELL_ARCANE_BLAST, true);
             me->CastSpell(me, SPELL_ARCANE_FIELD, true);
             me->CastSpell(me, SPELL_DESPAWN_CRYSTAL_HANDLER, true);
 
-            for (auto itr : npcSummon)
+            for (auto& itr : npcSummon)
             {
                 uint32 summonEntry;
                 Position summonPos;
@@ -133,38 +152,38 @@ public:
                     }
             }
 
-            me->SetUInt64Value(UNIT_FIELD_TARGET, 0);
+            me->SetGuidValue(UNIT_FIELD_TARGET, ObjectGuid::Empty);
             me->RemoveAllAuras();
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             Talk(SAY_DEATH);
             BossAI::JustDied(killer);
             instance->SetBossState(DATA_NOVOS_CRYSTALS, DONE);
         }
 
-        void KilledUnit(Unit*  /*victim*/)
+        void KilledUnit(Unit*  /*victim*/) override
         {
             if (events.GetNextEventTime(EVENT_KILL_TALK) == 0)
             {
                 Talk(SAY_KILL);
-                events.ScheduleEvent(EVENT_KILL_TALK, 6000);
+                events.ScheduleEvent(EVENT_KILL_TALK, 6s);
             }
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
-            if (me->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) && summon->GetEntry() != NPC_CRYSTAL_CHANNEL_TARGET && summon->GetEntry() != NPC_CRYSTAL_HANDLER)
+            if (me->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE) && summon->GetEntry() != NPC_CRYSTAL_CHANNEL_TARGET && summon->GetEntry() != NPC_CRYSTAL_HANDLER)
                 summon->SetReactState(REACT_DEFENSIVE);
             else if (summon->GetEntry() != NPC_CRYSTAL_CHANNEL_TARGET)
                 summon->SetInCombatWithZone();
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -175,17 +194,17 @@ public:
                 case EVENT_SUMMON_FETID_TROLL:
                     if (Creature* trigger = summons.GetCreatureWithEntry(NPC_CRYSTAL_CHANNEL_TARGET))
                         trigger->CastSpell(trigger, SPELL_SUMMON_FETID_TROLL_CORPSE, true, nullptr, nullptr, me->GetGUID());
-                    events.ScheduleEvent(EVENT_SUMMON_FETID_TROLL, 3000);
+                    events.ScheduleEvent(EVENT_SUMMON_FETID_TROLL, 3s);
                     break;
                 case EVENT_SUMMON_HULKING_CORPSE:
                     if (Creature* trigger = summons.GetCreatureWithEntry(NPC_CRYSTAL_CHANNEL_TARGET))
                         trigger->CastSpell(trigger, SPELL_SUMMON_HULKING_CORPSE, true, nullptr, nullptr, me->GetGUID());
-                    events.ScheduleEvent(EVENT_SUMMON_HULKING_CORPSE, 30000);
+                    events.ScheduleEvent(EVENT_SUMMON_HULKING_CORPSE, 30s);
                     break;
                 case EVENT_SUMMON_SHADOWCASTER:
                     if (Creature* trigger = summons.GetCreatureWithEntry(NPC_CRYSTAL_CHANNEL_TARGET))
                         trigger->CastSpell(trigger, SPELL_SUMMON_RISEN_SHADOWCASTER, true, nullptr, nullptr, me->GetGUID());
-                    events.ScheduleEvent(EVENT_SUMMON_SHADOWCASTER, 10000);
+                    events.ScheduleEvent(EVENT_SUMMON_SHADOWCASTER, 10s);
                     break;
                 case EVENT_SUMMON_CRYSTAL_HANDLER:
                     if (_crystalCounter++ < 4)
@@ -195,44 +214,42 @@ public:
                         if (Creature* target = ObjectAccessor::GetCreature(*me, _stage ? _summonTargetLeftGUID : _summonTargetRightGUID))
                             target->CastSpell(target, SPELL_SUMMON_CRYSTAL_HANDLER, true, nullptr, nullptr, me->GetGUID());
                         _stage = _stage ? 0 : 1;
-                        events.ScheduleEvent(EVENT_SUMMON_CRYSTAL_HANDLER, 20000);
+                        events.ScheduleEvent(EVENT_SUMMON_CRYSTAL_HANDLER, 20s);
                     }
                     break;
                 case EVENT_CHECK_PHASE:
                     if (me->HasAura(SPELL_BEAM_CHANNEL))
                     {
-                        events.ScheduleEvent(EVENT_CHECK_PHASE, 2000);
+                        events.ScheduleEvent(EVENT_CHECK_PHASE, 2s);
                         break;
                     }
                     events.Reset();
-                    events.ScheduleEvent(EVENT_CAST_OFFENSIVE_SPELL, 3000);
-                    events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 10000);
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                    events.ScheduleEvent(EVENT_CAST_OFFENSIVE_SPELL, 3s);
+                    events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 10s);
+                    me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                    me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
                     me->InterruptNonMeleeSpells(false);
                     break;
                 case EVENT_CAST_OFFENSIVE_SPELL:
                     if (!me->HasUnitState(UNIT_STATE_CASTING))
-                        if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 100, true))
+                        if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 100, true))
                             me->CastSpell(target, RAND(SPELL_BLIZZARD, SPELL_FROSTBOLT, SPELL_TOUCH_OF_MISERY), false);
 
-                    events.ScheduleEvent(EVENT_CAST_OFFENSIVE_SPELL, 500);
+                    events.ScheduleEvent(EVENT_CAST_OFFENSIVE_SPELL, 500ms);
                     break;
                 case EVENT_SPELL_SUMMON_MINIONS:
                     if (me->HasUnitState(UNIT_STATE_CASTING))
                     {
                         me->CastSpell(me, SPELL_SUMMON_MINIONS, false);
-                        events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 15000);
+                        events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 15s);
                         break;
                     }
-                    events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 500);
+                    events.ScheduleEvent(EVENT_SPELL_SUMMON_MINIONS, 500ms);
                     break;
             }
-
-            EnterEvadeIfOutOfCombatArea();
         }
 
-        bool CheckEvadeIfOutOfCombatArea() const
+        bool CheckEvadeIfOutOfCombatArea() const override
         {
             return !SelectTargetFromPlayerList(80.0f);
         }
@@ -240,97 +257,74 @@ public:
     private:
         uint8 _crystalCounter;
         uint8 _stage;
-        uint64 _summonTargetRightGUID;
-        uint64 _summonTargetLeftGUID;
+        ObjectGuid _summonTargetRightGUID;
+        ObjectGuid _summonTargetLeftGUID;
 
         bool _achievement;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_novosAI>(creature);
+        return GetDraktharonKeepAI<boss_novosAI>(creature);
     }
 };
 
-class spell_novos_despawn_crystal_handler : public SpellScriptLoader
+class spell_novos_despawn_crystal_handler : public SpellScript
 {
-public:
-    spell_novos_despawn_crystal_handler() : SpellScriptLoader("spell_novos_despawn_crystal_handler") { }
+    PrepareSpellScript(spell_novos_despawn_crystal_handler);
 
-    class spell_novos_despawn_crystal_handler_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_novos_despawn_crystal_handler_SpellScript);
+        return ValidateSpellInfo({ SPELL_BEAM_CHANNEL });
+    }
 
-        void HandleScriptEffect(SpellEffIndex /*effIndex*/)
-        {
-            if (Unit* target = GetHitUnit())
-                target->CastSpell(GetCaster(), SPELL_BEAM_CHANNEL, true);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_novos_despawn_crystal_handler_SpellScript::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
     {
-        return new spell_novos_despawn_crystal_handler_SpellScript();
+        if (Unit* target = GetHitUnit())
+            target->CastSpell(GetCaster(), SPELL_BEAM_CHANNEL, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_novos_despawn_crystal_handler::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
-class spell_novos_crystal_handler_death : public SpellScriptLoader
+class spell_novos_crystal_handler_death_aura : public AuraScript
 {
-public:
-    spell_novos_crystal_handler_death() : SpellScriptLoader("spell_novos_crystal_handler_death") { }
+    PrepareAuraScript(spell_novos_crystal_handler_death_aura);
 
-    class spell_novos_crystal_handler_death_AuraScript : public AuraScript
+    void HandleEffectApply(AuraEffect const*  /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        PrepareAuraScript(spell_novos_crystal_handler_death_AuraScript)
+        GetUnitOwner()->InterruptNonMeleeSpells(false);
+        if (GameObject* crystal = GetUnitOwner()->FindNearestGameObjectOfType(GAMEOBJECT_TYPE_DOOR, 5.0f))
+            crystal->SetGoState(GO_STATE_READY);
+    }
 
-        void HandleEffectApply(AuraEffect const*  /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            GetUnitOwner()->InterruptNonMeleeSpells(false);
-            if (GameObject* crystal = GetUnitOwner()->FindNearestGameObjectOfType(GAMEOBJECT_TYPE_DOOR, 5.0f))
-                crystal->SetGoState(GO_STATE_READY);
-        }
-
-        void Register()
-        {
-            OnEffectApply += AuraEffectApplyFn(spell_novos_crystal_handler_death_AuraScript::HandleEffectApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void Register() override
     {
-        return new spell_novos_crystal_handler_death_AuraScript();
+        OnEffectApply += AuraEffectApplyFn(spell_novos_crystal_handler_death_aura::HandleEffectApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
-class spell_novos_summon_minions : public SpellScriptLoader
+class spell_novos_summon_minions : public SpellScript
 {
-public:
-    spell_novos_summon_minions() : SpellScriptLoader("spell_novos_summon_minions") { }
+    PrepareSpellScript(spell_novos_summon_minions);
 
-    class spell_novos_summon_minions_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_novos_summon_minions_SpellScript);
+        return ValidateSpellInfo({ SPELL_COPY_OF_SUMMON_MINIONS });
+    }
 
-        void HandleScript(SpellEffIndex /*effIndex*/)
-        {
-            for (uint8 i = 0; i < 4; ++i)
-                GetCaster()->CastSpell((Unit*)NULL, SPELL_COPY_OF_SUMMON_MINIONS, true);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_novos_summon_minions_SpellScript::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleScript(SpellEffIndex /*effIndex*/)
     {
-        return new spell_novos_summon_minions_SpellScript();
+        for (uint8 i = 0; i < 4; ++i)
+            GetCaster()->CastSpell((Unit*)nullptr, SPELL_COPY_OF_SUMMON_MINIONS, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_novos_summon_minions::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
@@ -339,7 +333,7 @@ class achievement_oh_novos : public AchievementCriteriaScript
 public:
     achievement_oh_novos() : AchievementCriteriaScript("achievement_oh_novos") { }
 
-    bool OnCheck(Player* /*player*/, Unit* target)
+    bool OnCheck(Player* /*player*/, Unit* target, uint32 /*criteria_id*/) override
     {
         return target && target->GetAI()->GetData(target->GetEntry());
     }
@@ -348,8 +342,8 @@ public:
 void AddSC_boss_novos()
 {
     new boss_novos();
-    new spell_novos_despawn_crystal_handler();
-    new spell_novos_crystal_handler_death();
-    new spell_novos_summon_minions();
+    RegisterSpellScript(spell_novos_despawn_crystal_handler);
+    RegisterSpellScript(spell_novos_crystal_handler_death_aura);
+    RegisterSpellScript(spell_novos_summon_minions);
     new achievement_oh_novos();
 }

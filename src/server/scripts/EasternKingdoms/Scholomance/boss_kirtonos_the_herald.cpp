@@ -1,13 +1,26 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "GameObjectAI.h"
+#include "MoveSplineInit.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "scholomance.h"
-#include "MoveSplineInit.h"
-#include "GameObjectAI.h"
-#include "Player.h"
 
 enum Spells
 {
@@ -18,7 +31,8 @@ enum Spells
     SPELL_KIRTONOS_TRANSFORM          = 16467,
     SPELL_SHADOW_BOLT_VOLLEY          = 17228,
     SPELL_CURSE_OF_TONGUES            = 12889,
-    SPELL_DOMINATE_MIND               = 14515
+    SPELL_DOMINATE_MIND               = 14515,
+    SPELL_TRANSFORM_VISUAL            = 24085
 };
 
 enum Events
@@ -66,153 +80,181 @@ public:
             instance = me->GetInstanceScript();
         }
 
+        int TransformsCount;
         EventMap events;
         EventMap events2;
         InstanceScript* instance;
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
+            TransformsCount = 0;
+
             events.Reset();
-            events.ScheduleEvent(EVENT_SHADOW_BOLT_VOLLEY, 2000);
-            events.ScheduleEvent(EVENT_CURSE_OF_TONGUES, 6000);
-            events.ScheduleEvent(EVENT_DOMINATE_MIND, 20000);
-            events.ScheduleEvent(EVENT_KIRTONOS_TRANSFORM, 5000);
+            events.ScheduleEvent(EVENT_SHADOW_BOLT_VOLLEY, 2s);
+            events.ScheduleEvent(EVENT_CURSE_OF_TONGUES, 6s);
+            events.ScheduleEvent(EVENT_KIRTONOS_TRANSFORM, 20s);
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
-            if (GameObject* gate = me->GetMap()->GetGameObject(instance->GetData64(GO_GATE_KIRTONOS)))
-                gate->SetGoState(GO_STATE_ACTIVE);
-
             instance->SetData(DATA_KIRTONOS_THE_HERALD, DONE);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
-            if (GameObject* gate = me->GetMap()->GetGameObject(instance->GetData64(GO_GATE_KIRTONOS)))
-                gate->SetGoState(GO_STATE_ACTIVE);
-
-            instance->SetData(DATA_KIRTONOS_THE_HERALD, NOT_STARTED);
+            instance->SetData(DATA_KIRTONOS_THE_HERALD, FAIL);
             me->DespawnOrUnsummon(1);
         }
 
-        void IsSummonedBy(Unit* /*summoner*/)
-        {
-            events2.Reset();
-            events2.ScheduleEvent(INTRO_1, 500);
-            me->SetDisableGravity(true);
-            me->SetReactState(REACT_PASSIVE);
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE);
-            Talk(EMOTE_SUMMONED);
-        }
-
-        void MovementInform(uint32 type, uint32 id)
+        void MovementInform(uint32 type, uint32 id) override
         {
             if (type == WAYPOINT_MOTION_TYPE && id == POINT_KIRTONOS_LAND)
             {
-                events2.ScheduleEvent(INTRO_2, 1500);
-                events2.ScheduleEvent(INTRO_3, 2500);
-                events2.ScheduleEvent(INTRO_4, 5500);
-                events2.ScheduleEvent(INTRO_5, 6500);
-                events2.ScheduleEvent(INTRO_6, 11500);
+                events2.ScheduleEvent(INTRO_2, 1500ms);
+                events2.ScheduleEvent(INTRO_3, 2500ms);
+                events2.ScheduleEvent(INTRO_4, 5500ms);
+                events2.ScheduleEvent(INTRO_5, 6500ms);
+                events2.ScheduleEvent(INTRO_6, 11500ms);
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void DoAction(int32 action) override
+        {
+            if (action == IN_PROGRESS)
+            {
+                events2.Reset();
+                events2.ScheduleEvent(INTRO_1, 1s);
+                me->SetCanFly(true);
+                me->SetDisableGravity(true);
+                me->SendMovementFlagUpdate();
+                me->SetReactState(REACT_PASSIVE);
+                me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                me->SetImmuneToAll(true); // for some reason he aggroes if we don't have this.
+            }
+        }
+
+        void UpdateAI(uint32 diff) override
         {
             events2.Update(diff);
             switch (events2.ExecuteEvent())
             {
                 case INTRO_1:
                     me->GetMotionMaster()->MovePath(KIRTONOS_PATH, false);
+                    Talk(EMOTE_SUMMONED);
                     break;
                 case INTRO_2:
                     me->GetMotionMaster()->MovePoint(0, PosMove[0]);
                     break;
                 case INTRO_3:
-                    if (GameObject* gate = me->GetMap()->GetGameObject(instance->GetData64(GO_GATE_KIRTONOS)))
-                        gate->SetGoState(GO_STATE_READY);
                     me->SetFacingTo(0.01745329f);
                     break;
                 case INTRO_4:
                     me->SetWalk(true);
+                    me->SetCanFly(false);
                     me->SetDisableGravity(false);
                     me->CastSpell(me, SPELL_KIRTONOS_TRANSFORM, true);
-                    me->SetCanFly(false);
+                    me->SendMovementFlagUpdate();
                     break;
                 case INTRO_5:
                     me->HandleEmoteCommand(EMOTE_ONESHOT_ROAR);
                     me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 0, uint32(WEAPON_KIRTONOS_STAFF));
-                    me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE);
+                    me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                    me->SetImmuneToAll(false);
                     me->SetReactState(REACT_AGGRESSIVE);
                     break;
                 case INTRO_6:
-                    me->GetMotionMaster()->MovePoint(0, PosMove[1]);
+                    if (!me->IsInCombat())
+                    {
+                        me->GetMotionMaster()->MovePoint(0, PosMove[1]);
+                    }
                     break;
             }
 
             if (!UpdateVictim())
+            {
                 return;
+            }
 
             events.Update(diff);
             if (me->HasUnitState(UNIT_STATE_CASTING))
+            {
                 return;
+            }
 
             switch (events.ExecuteEvent())
             {
                 case EVENT_SWOOP:
                     me->CastSpell(me->GetVictim(), SPELL_SWOOP, false);
-                    events.ScheduleEvent(EVENT_SWOOP, 15000);
+                    events.ScheduleEvent(EVENT_SWOOP, 15s);
                     break;
                 case EVENT_WING_FLAP:
                     me->CastSpell(me, SPELL_WING_FLAP, false);
-                    events.ScheduleEvent(EVENT_WING_FLAP, 13000);
+                    events.ScheduleEvent(EVENT_WING_FLAP, 13s);
                     break;
                 case EVENT_PIERCE_ARMOR:
                     me->CastSpell(me->GetVictim(), SPELL_PIERCE_ARMOR, false);
-                    events.ScheduleEvent(EVENT_PIERCE_ARMOR, 12000);
+                    events.ScheduleEvent(EVENT_PIERCE_ARMOR, 12s);
                     break;
                 case EVENT_DISARM:
                     me->CastSpell(me->GetVictim(), SPELL_DISARM, false);
-                    events.ScheduleEvent(EVENT_DISARM, 11000);
+                    events.ScheduleEvent(EVENT_DISARM, 11s);
                     break;
                 case EVENT_SHADOW_BOLT_VOLLEY:
                     me->CastSpell(me, SPELL_SHADOW_BOLT_VOLLEY, false);
-                    events.ScheduleEvent(EVENT_SHADOW_BOLT_VOLLEY, 10000);
+                    events.ScheduleEvent(EVENT_SHADOW_BOLT_VOLLEY, 10s);
                     break;
                 case EVENT_CURSE_OF_TONGUES:
                     me->CastSpell(me, SPELL_CURSE_OF_TONGUES, false);
-                    events.ScheduleEvent(EVENT_CURSE_OF_TONGUES, 20000);
+                    events.ScheduleEvent(EVENT_CURSE_OF_TONGUES, 20s);
                     break;
                 case EVENT_DOMINATE_MIND:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 1, 20.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 20.0f, true, false))
+                    {
                         me->CastSpell(target, SPELL_DOMINATE_MIND, false);
-                    events.ScheduleEvent(EVENT_DOMINATE_MIND, urand(44000, 48000));
+                    }
                     break;
                 case EVENT_KIRTONOS_TRANSFORM:
-                    if (me->HealthBelowPct(50))
+                    TransformsCount++;
+
+                    if (me->HasAura(SPELL_KIRTONOS_TRANSFORM))
                     {
                         events.Reset();
-                        events.ScheduleEvent(EVENT_SWOOP, 4000);
-                        events.ScheduleEvent(EVENT_WING_FLAP, 7000);
-                        events.ScheduleEvent(EVENT_PIERCE_ARMOR, 11000);
-                        events.ScheduleEvent(EVENT_DISARM, 15000);
+                        events.ScheduleEvent(EVENT_SWOOP, 4s);
+                        events.ScheduleEvent(EVENT_WING_FLAP, 7s);
+                        events.ScheduleEvent(EVENT_PIERCE_ARMOR, 11s);
+                        events.ScheduleEvent(EVENT_DISARM, 15s);
+                        // show shape-shift animation before aura removal
+                        me->CastSpell(me, SPELL_TRANSFORM_VISUAL, true);
                         me->RemoveAura(SPELL_KIRTONOS_TRANSFORM);
                         me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 0, uint32(0));
-                        break;
+                    }
+                    else
+                    {
+                        events.Reset();
+                        events.ScheduleEvent(EVENT_SHADOW_BOLT_VOLLEY, 2s);
+                        events.ScheduleEvent(EVENT_CURSE_OF_TONGUES, 6s);
+                        events.ScheduleEvent(EVENT_WING_FLAP, 13s);
+                        me->CastSpell(me, SPELL_KIRTONOS_TRANSFORM, true);
+                        me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 0, uint32(WEAPON_KIRTONOS_STAFF));
+                        // Schedule Dominate Mind on every 2nd caster transform
+                        if ((TransformsCount - 2) % 4 == 0)
+                        {
+                            events.ScheduleEvent(EVENT_DOMINATE_MIND, 4s, 8s);
+                        }
                     }
 
-                    events.ScheduleEvent(EVENT_KIRTONOS_TRANSFORM, 2000);
+                    events.ScheduleEvent(EVENT_KIRTONOS_TRANSFORM, 20s);
                     break;
             }
 
+            DoZoneInCombat();
             DoMeleeAttackIfReady();
         }
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_kirtonos_the_heraldAI>(creature);
+        return GetScholomanceAI<boss_kirtonos_the_heraldAI>(creature);
     }
 };
 

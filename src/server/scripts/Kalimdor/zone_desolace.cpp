@@ -1,30 +1,27 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Desolace
-SD%Complete: 100
-SDComment: Quest support: 5561
-SDCategory: Desolace
-EndScriptData */
-
-/* ContentData
-npc_aged_dying_ancient_kodo
-npc_dalinda_malem
-go_demon_portal
-EndContentData */
-
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "ScriptedGossip.h"
-#include "ScriptedEscortAI.h"
+#include "CreatureScript.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
+#include "ScriptedEscortAI.h"
+#include "ScriptedGossip.h"
 #include "SpellInfo.h"
 
-// Ours
 enum Caravan
 {
     QUEST_BODYGUARD_FOR_HIRE            = 5821,
@@ -54,7 +51,6 @@ enum Caravan
     NPC_LESSER_INFERNAL                 = 4676,
     NPC_DOOMWARDER                      = 4677,
     NPC_NETHER                          = 4684,
-
 };
 
 class npc_cork_gizelton : public CreatureScript
@@ -62,15 +58,15 @@ class npc_cork_gizelton : public CreatureScript
 public:
     npc_cork_gizelton() : CreatureScript("npc_cork_gizelton") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest)
+    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest) override
     {
         if (quest->GetQuestId() == QUEST_BODYGUARD_FOR_HIRE)
-            creature->AI()->SetGUID(player->GetGUID(), player->getFaction());
+            creature->AI()->SetGUID(player->GetGUID(), player->GetFaction());
 
         return true;
     }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_cork_gizeltonAI(creature);
     }
@@ -79,48 +75,46 @@ public:
     {
         npc_cork_gizeltonAI(Creature* creature) : npc_escortAI(creature)
         {
-            memset(&summons, 0, sizeof(summons));
         }
 
         EventMap events;
-        uint64 summons[MAX_CARAVAN_SUMMONS];
+        ObjectGuid summons[MAX_CARAVAN_SUMMONS];
         bool headNorth;
 
-        uint64 _playerGUID;
+        ObjectGuid _playerGUID;
         uint32 _faction;
 
         void Initialize()
         {
-            _playerGUID = 0;
             _faction = 35;
             headNorth = true;
             me->setActive(true);
-            events.ScheduleEvent(EVENT_RESTART_ESCORT, 0);
+            events.ScheduleEvent(EVENT_RESTART_ESCORT, 0ms);
         }
 
-        void JustRespawned()
+        void JustRespawned() override
         {
             npc_escortAI::JustRespawned();
             Initialize();
         }
 
-        void InitializeAI()
+        void InitializeAI() override
         {
             npc_escortAI::InitializeAI();
             Initialize();
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             RemoveSummons();
             npc_escortAI::JustDied(killer);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason why) override
         {
             SummonsFollow();
             ImmuneFlagSet(false, 35);
-            npc_escortAI::EnterEvadeMode();
+            npc_escortAI::EnterEvadeMode(why);
         }
 
         void CheckPlayer()
@@ -130,33 +124,33 @@ public:
                     if (me->IsWithinDist(player, 60.0f))
                         return;
 
-            _playerGUID = 0;
+            _playerGUID.Clear();
             _faction = 35;
             ImmuneFlagSet(false, _faction);
         }
 
-        void SetGUID(uint64 playerGUID, int32 faction)
+        void SetGUID(ObjectGuid playerGUID, int32 faction) override
         {
             _playerGUID = playerGUID;
             _faction = faction;
             SetEscortPaused(false);
             if (Creature* active = !headNorth ? me : ObjectAccessor::GetCreature(*me, summons[0]))
-                active->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                active->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
             events.CancelEvent(EVENT_WAIT_FOR_ASSIST);
         }
 
-        void SetData(uint32 field, uint32 data)
+        void SetData(uint32 field, uint32 data) override
         {
             if (field == 1 && data == 1)
                 if (Player* player = me->SelectNearestPlayer(50.0f))
-                    SetGUID(player->GetGUID(), player->getFaction());
+                    SetGUID(player->GetGUID(), player->GetFaction());
         }
 
         bool CheckCaravan()
         {
             for (uint8 i = 0; i < MAX_CARAVAN_SUMMONS; ++i)
             {
-                if (summons[i] == 0)
+                if (!summons[i])
                 {
                     SummonHelpers();
                     return false;
@@ -179,47 +173,50 @@ public:
                 if (Creature* summon = ObjectAccessor::GetCreature(*me, summons[i]))
                     summon->DespawnOrUnsummon();
 
-                summons[i] = 0;
+                summons[i].Clear();
             }
         }
 
         void SummonHelpers()
         {
             RemoveSummons();
-            me->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+            me->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
 
-            Creature* cr = nullptr;
-            if ((cr = me->SummonCreature(NPC_RIGGER_GIZELTON, *me)))
+            if (Creature* cr = me->SummonCreature(NPC_RIGGER_GIZELTON, *me))
             {
-                cr->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                cr->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
                 summons[0] = cr->GetGUID();
             }
-            if ((cr = me->SummonCreature(NPC_CARAVAN_KODO, *me)))
+            if (Creature* cr = me->SummonCreature(NPC_CARAVAN_KODO, *me))
+            {
                 summons[1] = cr->GetGUID();
-            if ((cr = me->SummonCreature(NPC_CARAVAN_KODO, *me)))
+            }
+            if (Creature* cr = me->SummonCreature(NPC_CARAVAN_KODO, *me))
+            {
                 summons[2] = cr->GetGUID();
+            }
 
             SummonsFollow();
         }
 
-        void SummonedCreatureDies(Creature* creature, Unit*)
+        void SummonedCreatureDies(Creature* creature, Unit*) override
         {
             if (creature->GetGUID() == summons[0])
-                summons[0] = 0;
+                summons[0].Clear();
             else if (creature->GetGUID() == summons[1])
-                summons[1] = 0;
+                summons[1].Clear();
             else if (creature->GetGUID() == summons[2])
-                summons[2] = 0;
+                summons[2].Clear();
         }
 
-        void SummonedCreatureDespawn(Creature* creature)
+        void SummonedCreatureDespawn(Creature* creature) override
         {
             if (creature->GetGUID() == summons[0])
-                summons[0] = 0;
+                summons[0].Clear();
             else if (creature->GetGUID() == summons[1])
-                summons[1] = 0;
+                summons[1].Clear();
             else if (creature->GetGUID() == summons[2])
-                summons[2] = 0;
+                summons[2].Clear();
         }
 
         void SummonsFollow()
@@ -247,20 +244,20 @@ public:
             for (uint8 i = 0; i < MAX_CARAVAN_SUMMONS; ++i)
                 if (Creature* summon = ObjectAccessor::GetCreature(*me, summons[i]))
                 {
-                    summon->setFaction(faction);
+                    summon->SetFaction(faction);
                     if (remove)
-                        summon->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+                        summon->SetImmuneToNPC(false);
                     else
-                        summon->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+                        summon->SetImmuneToNPC(true);
                 }
             if (remove)
-                me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+                me->SetImmuneToNPC(false);
             else
-                me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
-            me->setFaction(faction);
+                me->SetImmuneToNPC(true);
+            me->SetFaction(faction);
         }
 
-        void WaypointReached(uint32 waypointId)
+        void WaypointReached(uint32 waypointId) override
         {
             RelocateSummons();
             switch (waypointId)
@@ -282,7 +279,7 @@ public:
                 // North -> South - hire
                 case 77:
                     SetEscortPaused(true);
-                    me->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                    me->SetNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
                     Talk(SAY_CARAVAN_HIRE);
                     events.ScheduleEvent(EVENT_WAIT_FOR_ASSIST, TIME_HIRE_STOP);
                     break;
@@ -291,7 +288,7 @@ public:
                     SetEscortPaused(true);
                     if (Creature* rigger = ObjectAccessor::GetCreature(*me, summons[0]))
                     {
-                        rigger->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                        rigger->SetNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
                         rigger->AI()->Talk(SAY_CARAVAN_HIRE);
                     }
                     events.ScheduleEvent(EVENT_WAIT_FOR_ASSIST, TIME_HIRE_STOP);
@@ -305,7 +302,7 @@ public:
                         else
                             player->FailQuest(QUEST_BODYGUARD_FOR_HIRE);
                     }
-                    _playerGUID = 0;
+                    _playerGUID.Clear();
                     CheckPlayer();
                     break;
                 // South -> North - complete
@@ -317,7 +314,7 @@ public:
                         else
                             player->FailQuest(QUEST_GIZELTON_CARAVAN);
                     }
-                    _playerGUID = 0;
+                    _playerGUID.Clear();
                     CheckPlayer();
                     break;
                 // North -> South - spawn attackers
@@ -333,7 +330,7 @@ public:
                         {
                             float o = (i * M_PI / 2) + (M_PI / 4);
                             float x = me->GetPositionX() + cos(o) * 15.0f;
-                            float y = me->GetPositionY() + sin(o) * 15.0f;
+                            float y = me->GetPositionY() + std::sin(o) * 15.0f;
                             if ((cr = me->SummonCreature((i % 2 == 0 ? NPC_KOLKAR_WAYLAYER : NPC_KOLKAR_AMBUSHER),
                                                          x, y, me->GetMap()->GetHeight(x, y, MAX_HEIGHT), 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 30000)))
                                 cr->AI()->AttackStart(me);
@@ -358,7 +355,7 @@ public:
                         {
                             float o = i * 2 * M_PI / 3;
                             float x = me->GetPositionX() + cos(o) * 10.0f;
-                            float y = me->GetPositionY() + sin(o) * 10.0f;
+                            float y = me->GetPositionY() + std::sin(o) * 10.0f;
                             uint32 entry = NPC_LESSER_INFERNAL;
                             if (i)
                                 entry = i == 1 ? NPC_DOOMWARDER : NPC_NETHER;
@@ -374,13 +371,12 @@ public:
                         break;
                     }
                 case 282:
-                    events.ScheduleEvent(EVENT_RESTART_ESCORT, 1000);
+                    events.ScheduleEvent(EVENT_RESTART_ESCORT, 1s);
                     break;
-
             }
         }
 
-        void UpdateEscortAI(uint32 diff)
+        void UpdateEscortAI(uint32 diff) override
         {
             events.Update(diff);
             switch (events.ExecuteEvent())
@@ -395,12 +391,12 @@ public:
                 case EVENT_WAIT_FOR_ASSIST:
                     SetEscortPaused(false);
                     if (Creature* active = !headNorth ? me : ObjectAccessor::GetCreature(*me, summons[0]))
-                        active->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+                        active->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
                     break;
                 case EVENT_RESTART_ESCORT:
                     CheckCaravan();
                     SetDespawnAtEnd(false);
-                    Start(true, true, 0, 0, false, false, true);
+                    Start(true, true, ObjectGuid::Empty, 0, false, false, true);
                     break;
             }
 
@@ -412,13 +408,13 @@ public:
     };
 };
 
-
-// Theirs
 enum DyingKodo
 {
     SAY_SMEED_HOME                  = 0,
 
     QUEST_KODO                      = 5561,
+
+    NPC_TEXT_KODO                   = 4449, // MenuID 3650
 
     NPC_SMEED                       = 11596,
     NPC_AGED_KODO                   = 4700,
@@ -430,7 +426,6 @@ enum DyingKodo
     SPELL_KODO_KOMBO_PLAYER_BUFF    = 18172,
     SPELL_KODO_KOMBO_DESPAWN_BUFF   = 18377,
     SPELL_KODO_KOMBO_GOSSIP         = 18362
-
 };
 
 class npc_aged_dying_ancient_kodo : public CreatureScript
@@ -444,7 +439,7 @@ public:
 
         void JustRespawned() override
         {
-            me->UpdateEntry(RAND(NPC_AGED_KODO, NPC_DYING_KODO, NPC_ANCIENT_KODO), NULL, false);
+            me->UpdateEntry(RAND(NPC_AGED_KODO, NPC_DYING_KODO, NPC_ANCIENT_KODO), nullptr, false);
         }
 
         void MoveInLineOfSight(Unit* who) override
@@ -453,6 +448,7 @@ public:
             {
                 me->SetHomePosition(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), me->GetOrientation());
                 me->GetMotionMaster()->Clear();
+                me->GetMotionMaster()->MoveIdle();
 
                 DoCast(me, SPELL_KODO_KOMBO_GOSSIP, true);
                 if (Creature* smeed = who->ToCreature())
@@ -467,7 +463,7 @@ public:
                 if (!(caster->HasAura(SPELL_KODO_KOMBO_PLAYER_BUFF) || me->HasAura(SPELL_KODO_KOMBO_DESPAWN_BUFF))
                         && (me->GetEntry() == NPC_AGED_KODO || me->GetEntry() == NPC_DYING_KODO || me->GetEntry() == NPC_ANCIENT_KODO))
                 {
-                    me->UpdateEntry(NPC_TAMED_KODO, NULL, false);
+                    me->UpdateEntry(NPC_TAMED_KODO, nullptr, false);
                     EnterEvadeMode();
                     me->GetMotionMaster()->MoveFollow(caster, PET_FOLLOW_DIST, me->GetFollowAngle());
 
@@ -477,7 +473,7 @@ public:
             }
             else if (spell->Id == SPELL_KODO_KOMBO_GOSSIP)
             {
-                me->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+                me->SetNpcFlag(UNIT_NPC_FLAG_GOSSIP);
                 me->DespawnOrUnsummon(60000);
             }
         }
@@ -487,11 +483,11 @@ public:
     {
         if (player->HasAura(SPELL_KODO_KOMBO_PLAYER_BUFF) && creature->HasAura(SPELL_KODO_KOMBO_DESPAWN_BUFF))
         {
-            player->TalkedToCreature(creature->GetEntry(), 0);
+            player->TalkedToCreature(creature->GetEntry(), ObjectGuid::Empty);
             player->RemoveAurasDueToSpell(SPELL_KODO_KOMBO_PLAYER_BUFF);
         }
 
-        SendGossipMenuFor(player, player->GetGossipTextId(creature), creature->GetGUID());
+        SendGossipMenuFor(player, NPC_TEXT_KODO, creature->GetGUID());
         return true;
     }
 
@@ -499,118 +495,10 @@ public:
     {
         return new npc_aged_dying_ancient_kodoAI(creature);
     }
-
-};
-
-/*######
-## npc_dalinda_malem. Quest 1440
-######*/
-
-enum Dalinda
-{
-    QUEST_RETURN_TO_VAHLARRIEL      = 1440
-};
-
-class npc_dalinda : public CreatureScript
-{
-public:
-    npc_dalinda() : CreatureScript("npc_dalinda") { }
-
-    struct npc_dalindaAI : public npc_escortAI
-    {
-        npc_dalindaAI(Creature* creature) : npc_escortAI(creature) { }
-
-        void Reset() { }
-
-        void EnterCombat(Unit* /*who*/) { }
-
-        void JustDied(Unit* /*killer*/)
-        {
-            if (Player* player = GetPlayerForEscort())
-                player->FailQuest(QUEST_RETURN_TO_VAHLARRIEL);
-            return;
-        }
-
-        void WaypointReached(uint32 waypointId)
-        {
-            Player* player = GetPlayerForEscort();
-
-            switch (waypointId)
-            {
-                case 1:
-                    me->SetStandState(UNIT_STAND_STATE_STAND);
-                    break;
-                case 15:
-                    if (player)
-                        player->GroupEventHappens(QUEST_RETURN_TO_VAHLARRIEL, me);
-                    break;
-            }
-        }
-
-        void UpdateAI(uint32 diff)
-        {
-            npc_escortAI::UpdateAI(diff);
-
-            if (!UpdateVictim())
-                return;
-
-            DoMeleeAttackIfReady();
-        }
-    };
-
-    bool OnQuestAccept(Player* player, Creature* creature, Quest const* quest)
-    {
-        if (quest->GetQuestId() == QUEST_RETURN_TO_VAHLARRIEL)
-        {
-            if (npc_escortAI* escortAI = CAST_AI(npc_dalinda::npc_dalindaAI, creature->AI()))
-            {
-                escortAI->Start(true, false, player->GetGUID());
-                creature->setFaction(113);
-            }
-        }
-        return true;
-    }
-
-    CreatureAI* GetAI(Creature* creature) const
-    {
-        return new npc_dalindaAI(creature);
-    }
-};
-
-/*######
-## go_demon_portal
-######*/
-
-enum DemonPortal
-{
-    NPC_DEMON_GUARDIAN          = 11937,
-    QUEST_PORTAL_OF_THE_LEGION  = 5581
-};
-
-class go_demon_portal : public GameObjectScript
-{
-public:
-    go_demon_portal() : GameObjectScript("go_demon_portal") { }
-
-    bool OnGossipHello(Player* player, GameObject* go) override
-    {
-        if (player->GetQuestStatus(QUEST_PORTAL_OF_THE_LEGION) == QUEST_STATUS_INCOMPLETE && !go->FindNearestCreature(NPC_DEMON_GUARDIAN, 5.0f, true))
-        {
-            if (Creature* guardian = player->SummonCreature(NPC_DEMON_GUARDIAN, go->GetPositionX(), go->GetPositionY(), go->GetPositionZ(), 0.0f, TEMPSUMMON_DEAD_DESPAWN, 0))
-                guardian->AI()->AttackStart(player);
-        }
-
-        return true;
-    }
 };
 
 void AddSC_desolace()
 {
-    // Ours
     new npc_cork_gizelton();
-
-    // Theirs
     new npc_aged_dying_ancient_kodo();
-    new npc_dalinda();
-    new go_demon_portal();
 }

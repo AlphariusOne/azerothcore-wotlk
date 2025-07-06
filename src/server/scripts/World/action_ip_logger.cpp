@@ -1,16 +1,28 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "AccountScript.h"
 #include "Channel.h"
-#include "Guild.h"
 #include "Group.h"
+#include "Guild.h"
+#include "PlayerScript.h"
 
 enum IPLoggingTypes
 {
-
     // AccountActionIpLogger();
     ACCOUNT_LOGIN = 0,
     ACCOUNT_FAIL_LOGIN = 1,
@@ -129,24 +141,24 @@ public:
         {
             // As we can assume most account actions are NOT failed login, so this is the more accurate check.
             // For those, we need last_ip...
-            PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_ALDL_IP_LOGGING);
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_ALDL_IP_LOGGING);
 
-            stmt->setUInt32(0, playerGuid);
-            stmt->setUInt32(1, characterGuid);
-            stmt->setUInt8(2, aType);
-            stmt->setUInt32(3, playerGuid);
-            stmt->setString(4, systemNote.c_str());
+            stmt->SetData(0, playerGuid);
+            stmt->SetData(1, characterGuid);
+            stmt->SetData(2, aType);
+            stmt->SetData(3, playerGuid);
+            stmt->SetData(4, systemNote.c_str());
             LoginDatabase.Execute(stmt);
         }
         else // ... but for failed login, we query last_attempt_ip from account table. Which we do with an unique query
         {
-            PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_FACL_IP_LOGGING);
+            LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_FACL_IP_LOGGING);
 
-            stmt->setUInt32(0, playerGuid);
-            stmt->setUInt32(1, characterGuid);
-            stmt->setUInt8(2, aType);
-            stmt->setUInt32(3, playerGuid);
-            stmt->setString(4, systemNote.c_str());
+            stmt->SetData(0, playerGuid);
+            stmt->SetData(1, characterGuid);
+            stmt->SetData(2, aType);
+            stmt->SetData(3, playerGuid);
+            stmt->SetData(4, systemNote.c_str());
             LoginDatabase.Execute(stmt);
         }
         return;
@@ -156,22 +168,30 @@ public:
 class CharacterActionIpLogger : public PlayerScript
 {
 public:
-    CharacterActionIpLogger() : PlayerScript("CharacterActionIpLogger") { }
+    CharacterActionIpLogger() :
+        PlayerScript("CharacterActionIpLogger",
+        {
+            PLAYERHOOK_ON_CREATE,
+            PLAYERHOOK_ON_LOGIN,
+            PLAYERHOOK_ON_LOGOUT
+        })
+    {
+    }
 
     // CHARACTER_CREATE = 7
-    void OnCreate(Player* player) override
+    void OnPlayerCreate(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_CREATE);
     }
 
     // CHARACTER_LOGIN = 8
-    void OnLogin(Player* player) override
+    void OnPlayerLogin(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_LOGIN);
     }
 
     // CHARACTER_LOGOUT = 9
-    void OnLogout(Player* player) override
+    void OnPlayerLogout(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_LOGOUT);
     }
@@ -195,7 +215,7 @@ public:
 
         // We declare all the required variables
         uint32 playerGuid = player->GetSession()->GetAccountId();
-        uint32 characterGuid = player->GetGUIDLow();
+        ObjectGuid::LowType characterGuid = player->GetGUID().GetCounter();
         const std::string currentIp = player->GetSession()->GetRemoteAddress();
         std::string systemNote = "ERROR"; // "ERROR" is a placeholder here. We change it...
 
@@ -225,13 +245,13 @@ public:
         }
 
         // Once we have done everything, we can insert the new log.
-        PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_CHAR_IP_LOGGING);
+        LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_INS_CHAR_IP_LOGGING);
 
-        stmt->setUInt32(0, playerGuid);
-        stmt->setUInt32(1, characterGuid);
-        stmt->setUInt8(2, aType);
-        stmt->setString(3, currentIp.c_str()); // We query the ip here.
-        stmt->setString(4, systemNote.c_str());
+        stmt->SetData(0, playerGuid);
+        stmt->SetData(1, characterGuid);
+        stmt->SetData(2, aType);
+        stmt->SetData(3, currentIp.c_str()); // We query the ip here.
+        stmt->SetData(4, systemNote.c_str());
         // Seeing as the time differences should be minimal, we do not get unixtime and the timestamp right now;
         // Rather, we let it be added with the SQL query.
 
@@ -243,21 +263,28 @@ public:
 class CharacterDeleteActionIpLogger : public PlayerScript
 {
 public:
-    CharacterDeleteActionIpLogger() : PlayerScript("CharacterDeleteActionIpLogger") { }
+    CharacterDeleteActionIpLogger() :
+        PlayerScript("CharacterDeleteActionIpLogger",
+        {
+            PLAYERHOOK_ON_DELETE,
+            PLAYERHOOK_ON_FAILED_DELETE
+        })
+    {
+    }
 
     // CHARACTER_DELETE = 10
-    void OnDelete(uint64 guid, uint32 accountId) override
+    void OnPlayerDelete(ObjectGuid guid, uint32 accountId) override
     {
         DeleteIPLogAction(guid, accountId, CHARACTER_DELETE);
     }
 
     // CHARACTER_FAILED_DELETE = 11
-    void OnFailedDelete(uint64 guid, uint32 accountId) override
+    void OnPlayerFailedDelete(ObjectGuid guid, uint32 accountId) override
     {
         DeleteIPLogAction(guid, accountId, CHARACTER_FAILED_DELETE);
     }
 
-    void DeleteIPLogAction(uint64 guid, uint32 playerGuid, IPLoggingTypes aType)
+    void DeleteIPLogAction(ObjectGuid guid, ObjectGuid::LowType playerGuid, IPLoggingTypes aType)
     {
         if (!sWorld->getBoolConfig(CONFIG_IP_BASED_ACTION_LOGGING))
             return;
@@ -266,7 +293,7 @@ public:
         // Else, this script isn't loaded in the first place: We require no config check.
 
         // We declare all the required variables
-        uint32 characterGuid = GUID_LOPART(guid); // We have no access to any member function of Player* or WorldSession*. So use old-fashioned way.
+        ObjectGuid::LowType characterGuid = guid.GetCounter(); // We have no access to any member function of Player* or WorldSession*. So use old-fashioned way.
         // Query playerGuid/accountId, as we only have characterGuid
         std::string systemNote = "ERROR"; // "ERROR" is a placeholder here. We change it later.
 
@@ -288,13 +315,12 @@ public:
         }
 
         // Once we have done everything, we can insert the new log.
-        PreparedStatement* stmt2 = LoginDatabase.GetPreparedStatement(LOGIN_INS_ALDL_IP_LOGGING);
-
-        stmt2->setUInt32(0, playerGuid);
-        stmt2->setUInt32(1, characterGuid);
-        stmt2->setUInt8(2, aType);
-        stmt2->setUInt32(3, playerGuid);
-        stmt2->setString(4, systemNote.c_str());
+        LoginDatabasePreparedStatement* stmt2 = LoginDatabase.GetPreparedStatement(LOGIN_INS_ALDL_IP_LOGGING);
+        stmt2->SetData(0, playerGuid);
+        stmt2->SetData(1, characterGuid);
+        stmt2->SetData(2, aType);
+        stmt2->SetData(3, playerGuid);
+        stmt2->SetData(4, systemNote.c_str());
         // Seeing as the time differences should be minimal, we do not get unixtime and the timestamp right now;
         // Rather, we let it be added with the SQL query.
 
@@ -302,7 +328,6 @@ public:
         return;
     }
 };
-
 
 void AddSC_action_ip_logger()
 {

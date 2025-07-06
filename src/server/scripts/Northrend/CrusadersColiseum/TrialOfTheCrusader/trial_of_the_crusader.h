@@ -1,12 +1,29 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_CRUSADER_H
 #define DEF_CRUSADER_H
 
+#include "CreatureAIImpl.h"
 #include "GridNotifiers.h"
-#include "SpellAuraEffects.h"
+
+#define DataHeader "TCR"
+
+#define TrialOfTheCrusaderScriptName "instance_trial_of_the_crusader"
 
 enum DataTypes
 {
@@ -242,6 +259,7 @@ enum eTexts
 
     // Lord Jaraxxus
     SAY_STAGE_1_05            = 0,
+    SAY_STAGE_1_06_1          = 9,
 
     //  The Lich King
     SAY_STAGE_4_02            = 0,
@@ -361,13 +379,6 @@ enum eAchievementCriteria
     ACHIEV_CRITERIA_REALM_FIRST_GRAND_CRUSADER              = 12350,
 };
 
-
-enum euiWorldStates
-{
-    UPDATE_STATE_UI_SHOW                                    = 4390,
-    UPDATE_STATE_UI_COUNT                                   = 4389,
-};
-
 const uint32 dIIc = 405;
 const uint32 dedicatedInsanityItems[405] =
 {
@@ -386,5 +397,11 @@ const uint32 dedicatedInsanityItems[405] =
     48622, 48623, 48624, 48625, 48626, 48637, 48638, 48639, 48640, 48641, 48657, 48658, 48659, 48660, 48661, 48666, 48667, 48668, 48669, 48670, 48671, 48672, 48673, 48674, 48675, 48693, 48695, 48697, 48699, 48701,
     48703, 48705, 48708, 48709, 48710, 48711, 48712, 48713, 48714, 48722, 48724, 49233, 49234, 49237, 49238
 };
+
+template <class AI, class T>
+inline AI* GetTrialOfTheCrusaderAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, TrialOfTheCrusaderScriptName);
+}
 
 #endif

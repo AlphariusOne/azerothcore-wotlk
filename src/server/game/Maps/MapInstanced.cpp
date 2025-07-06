@@ -1,23 +1,28 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "MapInstanced.h"
-#include "ObjectMgr.h"
-#include "MapManager.h"
 #include "Battleground.h"
-#include "VMapFactory.h"
-#include "MMapFactory.h"
-#include "InstanceSaveMgr.h"
-#include "World.h"
 #include "Group.h"
+#include "InstanceSaveMgr.h"
+#include "MapMgr.h"
+#include "ObjectMgr.h"
 #include "Player.h"
-
-#ifdef ELUNA
-#include "LuaEngine.h"
-#endif
+#include "ScriptMgr.h"
 
 MapInstanced::MapInstanced(uint32 id) : Map(id, 0, DUNGEON_DIFFICULTY_NORMAL)
 {
@@ -142,7 +147,7 @@ Map* MapInstanced::CreateInstanceForPlayer(const uint32 mapId, Player* player)
 
             map = FindInstanceMap(destInstId);
             if (!map)
-                map = CreateInstance(destInstId, pSave, realdiff);
+                map = CreateInstance(destInstId, pSave, realdiff, player);
             else if (IsSharedDifficultyMap(mapId) && !map->HavePlayers() && map->GetDifficulty() != realdiff)
             {
                 if (player->isBeingLoaded()) // pussywizard: crashfix (assert(passengers.empty) fail in ~transport), could be added to a transport during loading from db
@@ -155,7 +160,7 @@ Map* MapInstanced::CreateInstanceForPlayer(const uint32 mapId, Player* player)
                     if (i->first == destInstId)
                     {
                         DestroyInstance(i);
-                        map = CreateInstance(destInstId, pSave, realdiff);
+                        map = CreateInstance(destInstId, pSave, realdiff, player);
                         break;
                     }
             }
@@ -165,64 +170,73 @@ Map* MapInstanced::CreateInstanceForPlayer(const uint32 mapId, Player* player)
             uint32 newInstanceId = sMapMgr->GenerateInstanceId();
             ASSERT(!FindInstanceMap(newInstanceId)); // pussywizard: instance with new id can't exist
             Difficulty diff = player->GetGroup() ? player->GetGroup()->GetDifficulty(IsRaid()) : player->GetDifficulty(IsRaid());
-            map = CreateInstance(newInstanceId, NULL, diff);
+            map = CreateInstance(newInstanceId, nullptr, diff, player);
         }
     }
 
     return map;
 }
 
-InstanceMap* MapInstanced::CreateInstance(uint32 InstanceId, InstanceSave* save, Difficulty difficulty)
+InstanceMap* MapInstanced::CreateInstance(uint32 InstanceId, InstanceSave* save, Difficulty difficulty, Player* player)
 {
     // load/create a map
-    ACORE_GUARD(ACE_Thread_Mutex, Lock);
+    std::lock_guard<std::mutex> guard(Lock);
 
     // make sure we have a valid map id
-    const MapEntry* entry = sMapStore.LookupEntry(GetId());
+    MapEntry const* entry = sMapStore.LookupEntry(GetId());
     if (!entry)
     {
-        sLog->outError("CreateInstance: no entry for map %d", GetId());
+        LOG_ERROR("maps", "CreateInstance: no entry for map {}", GetId());
         ABORT();
     }
-    const InstanceTemplate* iTemplate = sObjectMgr->GetInstanceTemplate(GetId());
+    InstanceTemplate const* iTemplate = sObjectMgr->GetInstanceTemplate(GetId());
     if (!iTemplate)
     {
-        sLog->outError("CreateInstance: no instance template for map %d", GetId());
+        LOG_ERROR("maps", "CreateInstance: no instance template for map {}", GetId());
         ABORT();
     }
 
     // some instances only have one difficulty
     GetDownscaledMapDifficultyData(GetId(), difficulty);
 
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_MAPS, "MapInstanced::CreateInstance: %s map instance %d for %d created with difficulty %s", save ? "" : "new ", InstanceId, GetId(), difficulty ? "heroic" : "normal");
-#endif
+    LOG_DEBUG("maps", "MapInstanced::CreateInstance: {} map instance {} for {} created with difficulty {}", save ? "" : "new ", InstanceId, GetId(), difficulty ? "heroic" : "normal");
 
     InstanceMap* map = new InstanceMap(GetId(), InstanceId, difficulty, this);
     ASSERT(map->IsDungeon());
+    m_InstancedMaps[InstanceId] = map;
 
     map->LoadRespawnTimes();
+    map->LoadCorpseData();
 
     if (save)
         map->CreateInstanceScript(true, save->GetInstanceData(), save->GetCompletedEncounterMask());
     else
         map->CreateInstanceScript(false, "", 0);
 
+    if (map->GetInstanceScript() && map->GetInstanceScript()->IsTwoFactionInstance()
+        && map->GetInstanceScript()->GetTeamIdInInstance() == TEAM_NEUTRAL)
+    {
+        ASSERT(player); // Player should exist, as checked by in MapInstanced::CreateInstanceForPlayer
+        map->GetInstanceScript()->SetTeamIdInInstance(player->GetTeamId());
+        if (Group* group = player->GetGroup())
+            if (Player* leader = ObjectAccessor::FindConnectedPlayer(group->GetLeaderGUID()))
+                map->GetInstanceScript()->SetTeamIdInInstance(leader->GetTeamId());
+    }
+
+    map->OnCreateMap();
+
     if (!save) // this is for sure a dungeon (assert above), no need to check here
         sInstanceSaveMgr->AddInstanceSave(GetId(), InstanceId, difficulty);
 
-    m_InstancedMaps[InstanceId] = map;
     return map;
 }
 
 BattlegroundMap* MapInstanced::CreateBattleground(uint32 InstanceId, Battleground* bg)
 {
     // load/create a map
-    ACORE_GUARD(ACE_Thread_Mutex, Lock);
+    std::lock_guard<std::mutex> guard(Lock);
 
-#if defined(ENABLE_EXTRAS) && defined(ENABLE_EXTRA_LOGS)
-    sLog->outDebug(LOG_FILTER_MAPS, "MapInstanced::CreateBattleground: map bg %d for %d created.", InstanceId, GetId());
-#endif
+    LOG_DEBUG("maps", "MapInstanced::CreateBattleground: map bg {} for {} created.", InstanceId, GetId());
 
     PvPDifficultyEntry const* bracketEntry = GetBattlegroundBracketByLevel(bg->GetMapId(), bg->GetMinLevel());
 
@@ -235,10 +249,13 @@ BattlegroundMap* MapInstanced::CreateBattleground(uint32 InstanceId, Battlegroun
 
     BattlegroundMap* map = new BattlegroundMap(GetId(), InstanceId, this, spawnMode);
     ASSERT(map->IsBattlegroundOrArena());
+    m_InstancedMaps[InstanceId] = map;
+
     map->SetBG(bg);
     bg->SetBgMap(map);
 
-    m_InstancedMaps[InstanceId] = map;
+    map->OnCreateMap();
+
     return map;
 }
 
@@ -246,22 +263,16 @@ BattlegroundMap* MapInstanced::CreateBattleground(uint32 InstanceId, Battlegroun
 bool MapInstanced::DestroyInstance(InstancedMaps::iterator& itr)
 {
     itr->second->RemoveAllPlayers();
+
     if (itr->second->HavePlayers())
     {
         ++itr;
         return false;
     }
 
+    sScriptMgr->OnDestroyInstance(this, itr->second);
+
     itr->second->UnloadAll();
-
-    // Free up the instance id and allow it to be reused for bgs and arenas (other instances are handled in the InstanceSaveMgr)
-    //if (itr->second->IsBattlegroundOrArena())
-    //    sMapMgr->FreeInstanceId(itr->second->GetInstanceId());
-
-#ifdef ELUNA
-    //todo:[ELUNA] I'm not sure this is right.
-    sEluna->FreeInstanceId(itr->second->GetInstanceId());
-#endif
 
     // erase map
     delete itr->second;
@@ -270,8 +281,8 @@ bool MapInstanced::DestroyInstance(InstancedMaps::iterator& itr)
     return true;
 }
 
-bool MapInstanced::CanEnter(Player* /*player*/, bool /*loginCheck*/)
+Map::EnterState MapInstanced::CannotEnter(Player* /*player*/, bool /*loginCheck*/)
 {
     //ABORT();
-    return true;
+    return CAN_ENTER;
 }

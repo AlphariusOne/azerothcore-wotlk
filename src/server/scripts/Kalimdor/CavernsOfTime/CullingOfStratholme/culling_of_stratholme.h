@@ -1,9 +1,27 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_CULLING_OF_STRATHOLME_H
 #define DEF_CULLING_OF_STRATHOLME_H
+
+#include "CreatureAIImpl.h"
+
+#define DataHeader "CS"
+#define CullingOfStratholmeScriptName "instance_culling_of_stratholme"
 
 enum Data
 {
@@ -53,15 +71,6 @@ enum GameObjects
     GO_MALGANIS_CHEST_H                 = 193597,
     GO_SUSPICIOUS_CRATE                 = 190094,
     GO_PLAGUED_CRATE                    = 190095,
-};
-
-enum WorldStatesCoT
-{
-    WORLDSTATE_SHOW_CRATES              = 3479,
-    WORLDSTATE_CRATES_REVEALED          = 3480,
-    WORLDSTATE_WAVE_COUNT               = 3504,
-    WORLDSTATE_TIME_GUARDIAN            = 3931,
-    WORLDSTATE_TIME_GUARDIAN_SHOW       = 3932,
 };
 
 enum CrateSpells
@@ -167,5 +176,11 @@ const Position EventPos[] =
     {2329.07f,  1276.98f,  132.68f,  4.0f},         // infinite corruptor pos
     {2298.25f,  1500.56f,  128.37f,  4.95f}         // malganis final pos
 };
+
+template <class AI, class T>
+inline AI* GetCullingOfStratholmeAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, CullingOfStratholmeScriptName);
+}
 
 #endif

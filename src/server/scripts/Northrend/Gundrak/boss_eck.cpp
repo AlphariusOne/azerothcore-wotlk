@@ -1,8 +1,21 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "gundrak.h"
 
@@ -30,9 +43,9 @@ class boss_eck : public CreatureScript
 public:
     boss_eck() : CreatureScript("boss_eck") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_eckAI>(creature);
+        return GetGundrakAI<boss_eckAI>(creature);
     }
 
     struct boss_eckAI : public BossAI
@@ -41,7 +54,7 @@ public:
         {
         }
 
-        void InitializeAI()
+        void InitializeAI() override
         {
             BossAI::InitializeAI();
             me->GetMotionMaster()->MovePoint(POINT_START, 1638.55f, 919.76f, 104.95f, false);
@@ -49,7 +62,7 @@ public:
             me->SetReactState(REACT_PASSIVE);
         }
 
-        void MovementInform(uint32 type, uint32 id)
+        void MovementInform(uint32 type, uint32 id) override
         {
             if (type == POINT_MOTION_TYPE && id == POINT_START)
             {
@@ -58,26 +71,26 @@ public:
             }
         }
 
-        void Reset()
+        void Reset() override
         {
             BossAI::Reset();
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
-            BossAI::EnterCombat(who);
-            events.ScheduleEvent(EVENT_ECK_BERSERK, urand(60000, 90000));
-            events.ScheduleEvent(EVENT_ECK_BITE, 5000);
-            events.ScheduleEvent(EVENT_ECK_SPIT, 10000);
-            events.ScheduleEvent(EVENT_ECK_SPRING, 8000);
+            BossAI::JustEngagedWith(who);
+            events.ScheduleEvent(EVENT_ECK_BERSERK, 60s, 90s);
+            events.ScheduleEvent(EVENT_ECK_BITE, 5s);
+            events.ScheduleEvent(EVENT_ECK_SPIT, 10s);
+            events.ScheduleEvent(EVENT_ECK_SPRING, 8s);
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             BossAI::JustDied(killer);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -95,7 +108,7 @@ public:
                         me->CastSpell(me, SPELL_ECK_BERSERK, false);
                         break;
                     }
-                    events.ScheduleEvent(EVENT_ECK_HEALTH, 1000);
+                    events.ScheduleEvent(EVENT_ECK_HEALTH, 1s);
                     break;
                 case EVENT_ECK_BERSERK:
                     me->CastSpell(me, SPELL_ECK_BERSERK, false);
@@ -103,21 +116,21 @@ public:
                     break;
                 case EVENT_ECK_BITE:
                     me->CastSpell(me->GetVictim(), SPELL_ECK_BITE, false);
-                    events.ScheduleEvent(EVENT_ECK_BITE, urand(8000, 12000));
+                    events.ScheduleEvent(EVENT_ECK_BITE, 8s, 12s);
                     break;
                 case EVENT_ECK_SPIT:
                     me->CastSpell(me->GetVictim(), SPELL_ECK_SPIT, false);
-                    events.ScheduleEvent(EVENT_ECK_SPIT, 10000);
+                    events.ScheduleEvent(EVENT_ECK_SPIT, 10s);
                     break;
                 case EVENT_ECK_SPRING:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 1, 30.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 30.0f, true, false))
                     {
-                        me->getThreatManager().resetAllAggro();
+                        me->GetThreatMgr().ResetAllThreat();
                         me->AddThreat(target, 500.0f);
                         me->CastSpell(target, SPELL_ECK_SPRING, false);
                     }
 
-                    events.ScheduleEvent(EVENT_ECK_SPRING, urand(5000, 10000));
+                    events.ScheduleEvent(EVENT_ECK_SPRING, 5s, 10s);
                     break;
             }
 

@@ -1,12 +1,26 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "trial_of_the_crusader.h"
-#include "SpellScript.h"
 #include "SpellAuras.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "trial_of_the_crusader.h"
 
 enum JaraxxusTexts
 {
@@ -76,15 +90,14 @@ enum JaraxxusEvents
     EVENT_SPELL_MISTRESS_KISS,
 };
 
-
 class boss_jaraxxus : public CreatureScript
 {
 public:
     boss_jaraxxus() : CreatureScript("boss_jaraxxus") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_jaraxxusAI(pCreature);
+        return GetTrialOfTheCrusaderAI<boss_jaraxxusAI>(pCreature);
     }
 
     struct boss_jaraxxusAI : public ScriptedAI
@@ -100,56 +113,56 @@ public:
         EventMap events;
         SummonList summons;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
-            if( pInstance )
+            if (pInstance)
                 pInstance->SetData(TYPE_JARAXXUS, NOT_STARTED);
 
-            // checked for safety
-            while( Creature* c = me->FindNearestCreature(NPC_INFERNAL_VOLCANO, 500.0f, true) )
-                c->DespawnOrUnsummon();
-            while( Creature* c = me->FindNearestCreature(NPC_NETHER_PORTAL, 500.0f, true) )
-                c->DespawnOrUnsummon();
+            std::list<Creature*> creatures;
+            me->GetCreatureListWithEntryInGrid(creatures, NPC_INFERNAL_VOLCANO, 500.f);
+            me->GetCreatureListWithEntryInGrid(creatures, NPC_NETHER_PORTAL, 500.f);
+            for (Creature* creature : creatures)
+                creature->DespawnOrUnsummon();
         }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
             me->setActive(true);
             events.Reset();
-            events.RescheduleEvent(EVENT_SPELL_FEL_FIREBALL, 5000);
-            events.RescheduleEvent(EVENT_SPELL_FEL_LIGHTNING, urand(10000, 15000));
-            events.RescheduleEvent(EVENT_SPELL_INCINERATE_FLESH, urand(24000, 26000));
-            events.RescheduleEvent(EVENT_SPELL_NETHER_POWER, urand(25000, 45000));
-            events.RescheduleEvent(EVENT_SPELL_LEGION_FLAME, 30000);
-            //if( GetDifficulty() == RAID_DIFFICULTY_25MAN_HEROIC )
-            //  events.RescheduleEvent(EVENT_SPELL_TOUCH_OF_JARAXXUS, urand(10000,15000));
-            events.RescheduleEvent(EVENT_SUMMON_NETHER_PORTAL, 20000); // it schedules EVENT_SUMMON_VOLCANO
+            events.RescheduleEvent(EVENT_SPELL_FEL_FIREBALL, 5s);
+            events.RescheduleEvent(EVENT_SPELL_FEL_LIGHTNING, 10s, 15s);
+            events.RescheduleEvent(EVENT_SPELL_INCINERATE_FLESH, 24s, 26s);
+            events.RescheduleEvent(EVENT_SPELL_NETHER_POWER, 25s, 45s);
+            events.RescheduleEvent(EVENT_SPELL_LEGION_FLAME, 30s);
+            //if (GetDifficulty() == RAID_DIFFICULTY_25MAN_HEROIC )
+            //  events.RescheduleEvent(EVENT_SPELL_TOUCH_OF_JARAXXUS, 10s, 15s);
+            events.RescheduleEvent(EVENT_SUMMON_NETHER_PORTAL, 20s); // it schedules EVENT_SUMMON_VOLCANO
 
             me->RemoveAura(SPELL_CHAINS);
             Talk(SAY_AGGRO);
             DoZoneInCombat();
-            if( pInstance )
+            if (pInstance)
                 pInstance->SetData(TYPE_JARAXXUS, IN_PROGRESS);
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* spell)
+        void SpellHit(Unit* caster, SpellInfo const* spell) override
         {
-            switch( spell->Id )
+            switch (spell->Id)
             {
                 case 66228:
                 case 67106:
                 case 67107:
                 case 67108:
-                    if( Aura* a = me->GetAura(spell->Id) )
+                    if (Aura* a = me->GetAura(spell->Id))
                         a->SetStackAmount(spell->StackAmount);
                     break;
                 case 30449:
                     {
-                        if( !caster )
+                        if (!caster)
                             return;
                         uint32 id = 0;
-                        switch( me->GetMap()->GetDifficulty() )
+                        switch (me->GetMap()->GetDifficulty())
                         {
                             case 0:
                                 id = 66228;
@@ -164,9 +177,9 @@ public:
                                 id = 67108;
                                 break;
                         }
-                        if( Aura* a = me->GetAura(id) )
+                        if (Aura* a = me->GetAura(id))
                         {
-                            if( a->GetStackAmount() > 1 )
+                            if (a->GetStackAmount() > 1 )
                                 a->ModStackAmount(-1);
                             else
                                 a->Remove();
@@ -179,104 +192,104 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
-            if( !UpdateVictim() )
+            if (!UpdateVictim())
                 return;
 
             events.Update(diff);
 
-            if( me->HasUnitState(UNIT_STATE_CASTING) )
+            if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch( events.ExecuteEvent() )
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
                 case EVENT_SPELL_FEL_FIREBALL:
-                    if( me->GetVictim() )
+                    if (me->GetVictim())
                         me->CastSpell(me->GetVictim(), SPELL_FEL_FIREBALL, false);
-                    events.RepeatEvent(urand(10000, 15000));
+                    events.Repeat(10s, 15s);
                     break;
                 case EVENT_SPELL_FEL_LIGHTNING:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, true, true))
                         me->CastSpell(target, SPELL_FEL_LIGHTNING, false);
-                    events.RepeatEvent(urand(10000, 15000));
+                    events.Repeat(10s, 15s);
                     break;
                 case EVENT_SPELL_INCINERATE_FLESH:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, true, true))
                     {
                         Talk(EMOTE_INCINERATE, target);
                         Talk(SAY_INCINERATE);
                         me->CastSpell(target, SPELL_INCINERATE_FLESH, false);
                     }
-                    events.RepeatEvent(urand(20000, 25000));
+                    events.Repeat(20s, 25s);
                     break;
                 case EVENT_SPELL_NETHER_POWER:
                     me->CastSpell(me, SPELL_NETHER_POWER, false);
-                    events.DelayEvents(5000);
-                    events.RepeatEvent(urand(25000, 45000));
+                    events.DelayEvents(5s);
+                    events.Repeat(25s, 45s);
                     break;
                 case EVENT_SPELL_LEGION_FLAME:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, true, true))
                     {
                         Talk(EMOTE_LEGION_FLAME, target);
                         me->CastSpell(target, SPELL_LEGION_FLAME, false);
                     }
-                    events.RepeatEvent(30000);
+                    events.Repeat(30s);
                     break;
                 case EVENT_SPELL_TOUCH_OF_JARAXXUS:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, true))
                         me->CastSpell(target, SPELL_TOUCH_OF_JARAXXUS, false);
-                    events.RepeatEvent(urand(10000, 15000));
+                    events.Repeat(10s, 15s);
                     break;
                 case EVENT_SUMMON_NETHER_PORTAL:
                     Talk(EMOTE_NETHER_PORTAL);
                     Talk(SAY_MISTRESS_OF_PAIN);
-                    me->CastSpell((Unit*)NULL, SPELL_SUMMON_NETHER_PORTAL, false);
-                    
-                    events.RescheduleEvent(EVENT_SUMMON_VOLCANO, 60000);
+                    me->CastSpell((Unit*)nullptr, SPELL_SUMMON_NETHER_PORTAL, false);
+
+                    events.RescheduleEvent(EVENT_SUMMON_VOLCANO, 1min);
                     break;
                 case EVENT_SUMMON_VOLCANO:
                     Talk(EMOTE_INFERNAL_ERUPTION);
                     Talk(SAY_INFERNAL_ERUPTION);
-                    me->CastSpell((Unit*)NULL, SPELL_SUMMON_VOLCANO, false);
-                    
-                    events.RescheduleEvent(EVENT_SUMMON_NETHER_PORTAL, 60000);
+                    me->CastSpell((Unit*)nullptr, SPELL_SUMMON_VOLCANO, false);
+
+                    events.RescheduleEvent(EVENT_SUMMON_NETHER_PORTAL, 1min);
                     break;
             }
 
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*pKiller*/)
+        void JustDied(Unit* /*pKiller*/) override
         {
             summons.DespawnAll();
             Talk(SAY_DEATH);
-            if( pInstance )
+            if (pInstance)
                 pInstance->SetData(TYPE_JARAXXUS, DONE);
         }
 
-        void JustReachedHome()
+        void JustReachedHome() override
         {
             me->setActive(false);
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
             events.Reset();
             summons.DespawnAll();
-            me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-            if( pInstance )
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            if (pInstance)
                 pInstance->SetData(TYPE_FAILED, 1);
         }
 
-        void MoveInLineOfSight(Unit* /*who*/) {}
+        void MoveInLineOfSight(Unit* /*who*/) override {}
     };
 };
 
@@ -285,9 +298,9 @@ class npc_fel_infernal : public CreatureScript
 public:
     npc_fel_infernal() : CreatureScript("npc_fel_infernal") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new npc_fel_infernalAI(pCreature);
+        return GetTrialOfTheCrusaderAI<npc_fel_infernalAI>(pCreature);
     }
 
     struct npc_fel_infernalAI : public ScriptedAI
@@ -296,59 +309,58 @@ public:
 
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
-            if( Unit* target = me->SelectNearestTarget(200.0f) )
+            if (Unit* target = me->SelectNearestTarget(200.0f))
             {
                 AttackStart(target);
                 DoZoneInCombat();
             }
             events.Reset();
-            events.RescheduleEvent(EVENT_SPELL_FEL_STEAK, urand(7000, 20000));
+            events.RescheduleEvent(EVENT_SPELL_FEL_STEAK, 7s, 20s);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
-            if( !UpdateVictim() )
+            if (!UpdateVictim())
                 return;
 
             events.Update(diff);
 
-            if( me->HasUnitState(UNIT_STATE_CASTING) )
+            if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch( events.ExecuteEvent() )
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
                 case EVENT_SPELL_FEL_STEAK:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 44.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 44.0f, true))
                     {
-                        DoResetThreat();
+                        DoResetThreatList();
                         me->AddThreat(target, 50000.0f);
                         me->CastSpell(target, SPELL_FEL_STEAK_MORPH, true);
                         me->CastSpell(target, SPELL_FEL_STEAK, true);
-                        events.RepeatEvent(30000);
+                        events.Repeat(30s);
                     }
                     else
-                        events.RepeatEvent(5000);
+                        events.Repeat(5s);
                     break;
             }
 
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             me->DespawnOrUnsummon(10000);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
             me->DespawnOrUnsummon();
         }
     };
-
 };
 
 class npc_mistress_of_pain : public CreatureScript
@@ -356,9 +368,9 @@ class npc_mistress_of_pain : public CreatureScript
 public:
     npc_mistress_of_pain() : CreatureScript("npc_mistress_of_pain") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new npc_mistress_of_painAI(pCreature);
+        return GetTrialOfTheCrusaderAI<npc_mistress_of_painAI>(pCreature);
     }
 
     struct npc_mistress_of_painAI : public ScriptedAI
@@ -367,141 +379,123 @@ public:
 
         EventMap events;
 
-        void Reset()
+        void Reset() override
         {
-            if( Unit* target = me->SelectNearestTarget(200.0f) )
+            if (Unit* target = me->SelectNearestTarget(200.0f))
             {
                 AttackStart(target);
                 DoZoneInCombat();
             }
             events.Reset();
-            events.RescheduleEvent(EVENT_SPELL_SHIVAN_SLASH, urand(10000, 20000));
-            events.RescheduleEvent(EVENT_SPELL_SPINNING_PAIN_SPIKE, urand(22000, 30000));
-            if( IsHeroic() )
-                events.RescheduleEvent(EVENT_SPELL_MISTRESS_KISS, urand(10000, 15000));
+            events.RescheduleEvent(EVENT_SPELL_SHIVAN_SLASH, 10s, 20s);
+            events.RescheduleEvent(EVENT_SPELL_SPINNING_PAIN_SPIKE, 22s, 30s);
+            if (IsHeroic())
+                events.RescheduleEvent(EVENT_SPELL_MISTRESS_KISS, 10s, 15s);
         }
 
-        void SpellHit(Unit*  /*caster*/, const SpellInfo*  /*spell*/)
+        void SpellHit(Unit*  /*caster*/, SpellInfo const*  /*spell*/) override
         {
             //if (caster && spell && spell->Id == 66287 /*control vehicle*/)
             //  caster->ClearUnitState(UNIT_STATE_ONVEHICLE);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
-            if( !UpdateVictim() )
+            if (!UpdateVictim())
                 return;
 
             events.Update(diff);
 
-            if( me->HasUnitState(UNIT_STATE_CASTING) )
+            if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch( events.ExecuteEvent() )
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
                 case EVENT_SPELL_SHIVAN_SLASH:
-                    if( me->GetVictim() )
+                    if (me->GetVictim())
                         me->CastSpell(me->GetVictim(), SPELL_SHIVAN_SLASH, false);
-                    events.RepeatEvent(urand(15000, 25000));
+                    events.Repeat(15s, 25s);
                     break;
                 case EVENT_SPELL_SPINNING_PAIN_SPIKE:
-                    if( Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 140.0f, true) )
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 140.0f, true))
                         me->CastSpell(target, SPELL_SPINNING_PAIN_SPIKE, false);
-                    events.RepeatEvent(urand(25000, 30000));
+                    events.Repeat(25s, 30s);
                     break;
                 case EVENT_SPELL_MISTRESS_KISS:
-                    me->CastSpell((Unit*)NULL, SPELL_MISTRESS_KISS, false);
-                    events.RepeatEvent(urand(25000, 35000));
+                    me->CastSpell((Unit*)nullptr, SPELL_MISTRESS_KISS, false);
+                    events.Repeat(25s, 35s);
                     break;
             }
 
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             me->DespawnOrUnsummon(10000);
         }
 
-        void EnterEvadeMode()
+        void EnterEvadeMode(EvadeReason /*why*/) override
         {
             me->DespawnOrUnsummon();
         }
     };
-
 };
 
-class spell_toc25_mistress_kiss : public SpellScriptLoader
+class spell_toc25_mistress_kiss_aura : public AuraScript
 {
-public:
-    spell_toc25_mistress_kiss() : SpellScriptLoader("spell_toc25_mistress_kiss") { }
+    PrepareAuraScript(spell_toc25_mistress_kiss_aura);
 
-    class spell_toc25_mistress_kiss_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_toc25_mistress_kiss_AuraScript)
+        return ValidateSpellInfo({ 66359 });
+    }
 
-        void HandleEffectPeriodic(AuraEffect const*   /*aurEff*/)
-        {
-            if (Unit* caster = GetCaster())
-                if (Unit* target = GetTarget())
-                    if( target->HasUnitState(UNIT_STATE_CASTING) )
-                    {
-                        caster->CastSpell(target, 66359, true);
-                        SetDuration(0);
-                    }
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_toc25_mistress_kiss_AuraScript::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void HandleEffectPeriodic(AuraEffect const*   /*aurEff*/)
     {
-        return new spell_toc25_mistress_kiss_AuraScript();
+        if (Unit* caster = GetCaster())
+            if (Unit* target = GetTarget())
+                if (target->HasUnitState(UNIT_STATE_CASTING))
+                {
+                    caster->CastSpell(target, 66359, true);
+                    SetDuration(0);
+                }
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_toc25_mistress_kiss_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
-class spell_mistress_kiss_area : public SpellScriptLoader
+class spell_mistress_kiss_area : public SpellScript
 {
-public:
-    spell_mistress_kiss_area() : SpellScriptLoader("spell_mistress_kiss_area") {}
+    PrepareSpellScript(spell_mistress_kiss_area);
 
-    class spell_mistress_kiss_area_SpellScript : public SpellScript
+    void FilterTargets(std::list<WorldObject*>& targets)
     {
-        PrepareSpellScript(spell_mistress_kiss_area_SpellScript)
+        // get a list of players with mana
+        targets.remove_if(Acore::ObjectTypeIdCheck(TYPEID_PLAYER, false));
+        targets.remove_if(Acore::PowerCheck(POWER_MANA, false));
+        if (targets.empty())
+            return;
 
-        void FilterTargets(std::list<WorldObject*>& targets)
-        {
-            // get a list of players with mana
-            targets.remove_if(acore::ObjectTypeIdCheck(TYPEID_PLAYER, false));
-            targets.remove_if(acore::PowerCheck(POWER_MANA, false));
-            if (targets.empty())
-                return;
+        WorldObject* target = Acore::Containers::SelectRandomContainerElement(targets);
+        targets.clear();
+        targets.push_back(target);
+    }
 
-            WorldObject* target = acore::Containers::SelectRandomContainerElement(targets);
-            targets.clear();
-            targets.push_back(target);
-        }
-
-        void HandleScript(SpellEffIndex /*effIndex*/)
-        {
-            GetCaster()->CastSpell(GetHitUnit(), uint32(GetEffectValue()), true);
-        }
-
-        void Register()
-        {
-            OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_mistress_kiss_area_SpellScript::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
-            OnEffectHitTarget += SpellEffectFn(spell_mistress_kiss_area_SpellScript::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleScript(SpellEffIndex /*effIndex*/)
     {
-        return new spell_mistress_kiss_area_SpellScript();
+        GetCaster()->CastSpell(GetHitUnit(), uint32(GetEffectValue()), true);
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_mistress_kiss_area::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
+        OnEffectHitTarget += SpellEffectFn(spell_mistress_kiss_area::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
@@ -510,6 +504,6 @@ void AddSC_boss_jaraxxus()
     new boss_jaraxxus();
     new npc_fel_infernal();
     new npc_mistress_of_pain();
-    new spell_toc25_mistress_kiss();
-    new spell_mistress_kiss_area();
+    RegisterSpellScript(spell_toc25_mistress_kiss_aura);
+    RegisterSpellScript(spell_mistress_kiss_area);
 }

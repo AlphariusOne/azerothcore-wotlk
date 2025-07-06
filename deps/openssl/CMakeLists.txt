@@ -1,5 +1,5 @@
-# Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
-# Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU AGPL3 v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
+#
+# This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
 #
 # This file is free software; as a special exception the author gives
 # unlimited permission to copy and/or distribute it, with or without
@@ -8,20 +8,17 @@
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY, to the extent permitted by law; without even the
 # implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
+#
 
 # basic packagesearching and setup
 # (further support will be needed, this is a preliminary release!)
 set(OPENSSL_EXPECTED_VERSION 1.0.0)
 
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
 
 add_library(openssl INTERFACE)
 
 target_link_libraries(openssl
   INTERFACE
-    ${OPENSSL_LIBRARIES})
-
-target_include_directories(openssl
-  INTERFACE
-    ${OPENSSL_INCLUDE_DIR})
+    OpenSSL::Crypto
+    OpenSSL::SSL)

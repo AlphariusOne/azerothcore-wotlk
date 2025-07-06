@@ -1,11 +1,29 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "AchievementCriteriaScript.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "drak_tharon_keep.h"
 #include "SpellAuras.h"
+#include "SpellScriptLoader.h"
+#include "drak_tharon_keep.h"
+#include "SpellAuraEffects.h"
+#include "SpellMgr.h"
+#include "SpellScript.h"
 
 enum Yells
 {
@@ -52,51 +70,51 @@ public:
         {
         }
 
-        void Reset()
+        void Reset() override
         {
             BossAI::Reset();
             events2.Reset();
-            events2.ScheduleEvent(EVENT_SPAWN_INVADERS, 30000);
+            events2.ScheduleEvent(EVENT_SPAWN_INVADERS, 30s);
         }
 
-        void EnterCombat(Unit* who)
+        void JustEngagedWith(Unit* who) override
         {
-            events.ScheduleEvent(EVENT_SPELL_INFECTED_WOUND, urand(6000, 10000));
-            events.ScheduleEvent(EVENT_SPELL_CRUSH, urand(3000, 5000));
-            events.ScheduleEvent(EVENT_SPELL_CONSUME, 15000);
-            events.ScheduleEvent(EVENT_SPELL_CORPSE_EXPLODE, 35000);
-            events.ScheduleEvent(EVENT_SPAWN_INVADERS, 20000, 30000);
+            events.ScheduleEvent(EVENT_SPELL_INFECTED_WOUND, 6s, 10s);
+            events.ScheduleEvent(EVENT_SPELL_CRUSH, 3s, 5s);
+            events.ScheduleEvent(EVENT_SPELL_CONSUME, 15s);
+            events.ScheduleEvent(EVENT_SPELL_CORPSE_EXPLODE, 35s);
+            events.ScheduleEvent(EVENT_SPAWN_INVADERS, 20s, 30s);
 
             me->setActive(true);
             instance->SetBossState(DATA_TROLLGORE, IN_PROGRESS);
-            if (who->GetTypeId() == TYPEID_PLAYER)
+            if (who->IsPlayer())
             {
                 Talk(SAY_AGGRO);
                 me->SetInCombatWithZone();
             }
         }
 
-        void JustDied(Unit* killer)
+        void JustDied(Unit* killer) override
         {
             Talk(SAY_DEATH);
             BossAI::JustDied(killer);
         }
 
-        void KilledUnit(Unit*  /*victim*/)
+        void KilledUnit(Unit*  /*victim*/) override
         {
             if (events.GetNextEventTime(EVENT_KILL_TALK) == 0)
             {
                 Talk(SAY_KILL);
-                events.ScheduleEvent(EVENT_KILL_TALK, 6000);
+                events.ScheduleEvent(EVENT_KILL_TALK, 6s);
             }
         }
 
-        void JustSummoned(Creature* summon)
+        void JustSummoned(Creature* summon) override
         {
             summons.Summon(summon);
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events2.Update(diff);
             switch (events2.ExecuteEvent())
@@ -105,7 +123,7 @@ public:
                     me->CastSpell(me, SPELL_SUMMON_INVADER_A, true);
                     me->CastSpell(me, SPELL_SUMMON_INVADER_B, true);
                     me->CastSpell(me, SPELL_SUMMON_INVADER_C, true);
-                    events2.ScheduleEvent(EVENT_SPAWN_INVADERS, 30000);
+                    events2.ScheduleEvent(EVENT_SPAWN_INVADERS, 30s);
                     break;
             }
 
@@ -116,33 +134,32 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case EVENT_SPELL_INFECTED_WOUND:
                     me->CastSpell(me->GetVictim(), SPELL_INFECTED_WOUND, false);
-                    events.ScheduleEvent(EVENT_SPELL_INFECTED_WOUND, urand(25000, 35000));
+                    events.ScheduleEvent(EVENT_SPELL_INFECTED_WOUND, 25s, 35s);
                     break;
                 case EVENT_SPELL_CRUSH:
                     me->CastSpell(me->GetVictim(), SPELL_CRUSH, false);
-                    events.ScheduleEvent(EVENT_SPELL_CRUSH, urand(10000, 15000));
+                    events.ScheduleEvent(EVENT_SPELL_CRUSH, 10s, 15s);
                     break;
                 case EVENT_SPELL_CONSUME:
                     Talk(SAY_CONSUME);
                     me->CastSpell(me, SPELL_CONSUME, false);
-                    events.ScheduleEvent(EVENT_SPELL_CONSUME, 15000);
+                    events.ScheduleEvent(EVENT_SPELL_CONSUME, 15s);
                     break;
                 case EVENT_SPELL_CORPSE_EXPLODE:
                     Talk(SAY_EXPLODE);
                     me->CastSpell(me, SPELL_CORPSE_EXPLODE, false);
-                    events.ScheduleEvent(EVENT_SPELL_CORPSE_EXPLODE, urand(15000, 19000));
+                    events.ScheduleEvent(EVENT_SPELL_CORPSE_EXPLODE, 15s, 19s);
                     break;
             }
 
             DoMeleeAttackIfReady();
-            EnterEvadeIfOutOfCombatArea();
         }
 
-        bool CheckEvadeIfOutOfCombatArea() const
+        bool CheckEvadeIfOutOfCombatArea() const override
         {
             return me->GetHomePosition().GetExactDist2d(me) > 60.0f;
         }
@@ -151,98 +168,75 @@ public:
         EventMap events2;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return GetInstanceAI<boss_trollgoreAI>(creature);
+        return GetDraktharonKeepAI<boss_trollgoreAI>(creature);
     }
 };
 
-class spell_trollgore_consume : public SpellScriptLoader
+class spell_trollgore_consume : public SpellScript
 {
-public:
-    spell_trollgore_consume() : SpellScriptLoader("spell_trollgore_consume") { }
+    PrepareSpellScript(spell_trollgore_consume);
 
-    class spell_trollgore_consume_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_trollgore_consume_SpellScript);
+        return ValidateSpellInfo({ SPELL_CONSUME_AURA });
+    }
 
-        void HandleScriptEffect(SpellEffIndex /*effIndex*/)
-        {
-            if (Unit* target = GetHitUnit())
-                target->CastSpell(GetCaster(), SPELL_CONSUME_AURA, true);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_trollgore_consume_SpellScript::HandleScriptEffect, EFFECT_1, SPELL_EFFECT_SCRIPT_EFFECT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
     {
-        return new spell_trollgore_consume_SpellScript();
+        if (Unit* target = GetHitUnit())
+            target->CastSpell(GetCaster(), SPELL_CONSUME_AURA, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_trollgore_consume::HandleScriptEffect, EFFECT_1, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
-class spell_trollgore_corpse_explode : public SpellScriptLoader
+class spell_trollgore_corpse_explode_aura : public AuraScript
 {
-public:
-    spell_trollgore_corpse_explode() : SpellScriptLoader("spell_trollgore_corpse_explode") { }
+    PrepareAuraScript(spell_trollgore_corpse_explode_aura);
 
-    class spell_trollgore_corpse_explode_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_trollgore_corpse_explode_AuraScript);
+        return ValidateSpellInfo({ SPELL_CORPSE_EXPLODE_DAMAGE });
+    }
 
-        void PeriodicTick(AuraEffect const* aurEff)
-        {
-            if (aurEff->GetTickNumber() == 2)
-                if (Unit* caster = GetCaster())
-                    caster->CastSpell(GetTarget(), SPELL_CORPSE_EXPLODE_DAMAGE, true);
-        }
-
-        void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (Creature* target = GetTarget()->ToCreature())
-                target->DespawnOrUnsummon(1);
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_trollgore_corpse_explode_AuraScript::PeriodicTick, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-            AfterEffectRemove += AuraEffectRemoveFn(spell_trollgore_corpse_explode_AuraScript::HandleRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
+    void PeriodicTick(AuraEffect const* aurEff)
     {
-        return new spell_trollgore_corpse_explode_AuraScript();
+        if (aurEff->GetTickNumber() == 2)
+            if (Unit* caster = GetCaster())
+                caster->CastSpell(GetTarget(), SPELL_CORPSE_EXPLODE_DAMAGE, true);
+    }
+
+    void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Creature* target = GetTarget()->ToCreature())
+            target->DespawnOrUnsummon(1);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_trollgore_corpse_explode_aura::PeriodicTick, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
+        AfterEffectRemove += AuraEffectRemoveFn(spell_trollgore_corpse_explode_aura::HandleRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
-class spell_trollgore_invader_taunt : public SpellScriptLoader
+class spell_trollgore_invader_taunt : public SpellScript
 {
-public:
-    spell_trollgore_invader_taunt() : SpellScriptLoader("spell_trollgore_invader_taunt") { }
+    PrepareSpellScript(spell_trollgore_invader_taunt);
 
-    class spell_trollgore_invader_taunt_SpellScript : public SpellScript
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
     {
-        PrepareSpellScript(spell_trollgore_invader_taunt_SpellScript);
+        if (Unit* target = GetHitUnit())
+            target->CastSpell(GetCaster(), uint32(GetEffectValue()), true);
+    }
 
-        void HandleScriptEffect(SpellEffIndex /*effIndex*/)
-        {
-            if (Unit* target = GetHitUnit())
-                target->CastSpell(GetCaster(), uint32(GetEffectValue()), true);
-        }
-
-        void Register()
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_trollgore_invader_taunt_SpellScript::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void Register() override
     {
-        return new spell_trollgore_invader_taunt_SpellScript();
+        OnEffectHitTarget += SpellEffectFn(spell_trollgore_invader_taunt::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
@@ -253,7 +247,7 @@ public:
     {
     }
 
-    bool OnCheck(Player* /*player*/, Unit* target)
+    bool OnCheck(Player* /*player*/, Unit* target, uint32 /*criteria_id*/) override
     {
         if (!target)
             return false;
@@ -265,8 +259,8 @@ public:
 void AddSC_boss_trollgore()
 {
     new boss_trollgore();
-    new spell_trollgore_consume();
-    new spell_trollgore_corpse_explode();
-    new spell_trollgore_invader_taunt();
+    RegisterSpellScript(spell_trollgore_consume);
+    RegisterSpellScript(spell_trollgore_corpse_explode_aura);
+    RegisterSpellScript(spell_trollgore_invader_taunt);
     new achievement_consumption_junction();
 }

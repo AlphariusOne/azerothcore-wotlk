@@ -1,63 +1,76 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
-#include "ruby_sanctum.h"
 #include "Player.h"
-#include "TemporarySummon.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "WorldPacket.h"
+#include "WorldStateDefines.h"
+#include "WorldStatePackets.h"
+#include "ruby_sanctum.h"
+
+BossBoundaryData const boundaries =
+{
+    { DATA_GENERAL_ZARITHRIAN, new EllipseBoundary(Position(3013.409f, 529.492f), 45.0, 100.0) },
+    { DATA_HALION, new CircleBoundary(Position(3156.037f, 533.2656f), 48.5) }
+};
 
 DoorData const doorData[] =
 {
-    {GO_FIRE_FIELD,     DATA_BALTHARUS_THE_WARBORN, DOOR_TYPE_PASSAGE,  BOUNDARY_E   },
-    {GO_FLAME_WALLS,    DATA_SAVIANA_RAGEFIRE,      DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_FLAME_WALLS,    DATA_BALTHARUS_THE_WARBORN, DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_FLAME_WALLS,    DATA_GENERAL_ZARITHRIAN,    DOOR_TYPE_ROOM,     BOUNDARY_NONE},
-    {GO_BURNING_TREE_4, DATA_HALION_INTRO1,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_BURNING_TREE_3, DATA_HALION_INTRO1,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_BURNING_TREE_2, DATA_HALION_INTRO2,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_BURNING_TREE_1, DATA_HALION_INTRO2,         DOOR_TYPE_PASSAGE,  BOUNDARY_NONE},
-    {GO_TWILIGHT_FLAME_RING, DATA_HALION,           DOOR_TYPE_ROOM,     BOUNDARY_NONE},
-    {0,                 0,                          DOOR_TYPE_ROOM,     BOUNDARY_NONE},
+    {GO_FIRE_FIELD,     DATA_BALTHARUS_THE_WARBORN, DOOR_TYPE_PASSAGE },
+    {GO_FLAME_WALLS,    DATA_SAVIANA_RAGEFIRE,      DOOR_TYPE_PASSAGE },
+    {GO_FLAME_WALLS,    DATA_BALTHARUS_THE_WARBORN, DOOR_TYPE_PASSAGE },
+    {GO_FLAME_WALLS,    DATA_GENERAL_ZARITHRIAN,    DOOR_TYPE_ROOM,   },
+    {GO_BURNING_TREE_4, DATA_HALION_INTRO1,         DOOR_TYPE_PASSAGE },
+    {GO_BURNING_TREE_3, DATA_HALION_INTRO1,         DOOR_TYPE_PASSAGE },
+    {GO_BURNING_TREE_2, DATA_HALION_INTRO2,         DOOR_TYPE_PASSAGE },
+    {GO_BURNING_TREE_1, DATA_HALION_INTRO2,         DOOR_TYPE_PASSAGE },
+    {GO_TWILIGHT_FLAME_RING, DATA_HALION,           DOOR_TYPE_ROOM    },
+    {0,                 0,                          DOOR_TYPE_ROOM    },
 };
 
 class instance_ruby_sanctum : public InstanceMapScript
 {
 public:
-    instance_ruby_sanctum() : InstanceMapScript("instance_ruby_sanctum", 724) { }
+    instance_ruby_sanctum() : InstanceMapScript("instance_ruby_sanctum", MAP_THE_RUBY_SANCTUM) { }
 
     struct instance_ruby_sanctum_InstanceMapScript : public InstanceScript
     {
         instance_ruby_sanctum_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
         {
+            SetHeaders(DataHeader);
             SetBossNumber(MAX_ENCOUNTERS);
+            LoadBossBoundaries(boundaries);
             LoadDoorData(doorData);
-
-            BaltharusTheWarbornGUID  = 0;
-            XerestraszaGUID          = 0;
-            GeneralZarithrianGUID    = 0;
-            memset(ZarithrianSpawnStalkerGUID, 0, 2 * sizeof(uint64));
-
-            HalionGUID               = 0;
-            TwilightHalionGUID       = 0;
-            OrbCarrierGUID           = 0;
-            HalionControllerGUID     = 0;
-            FlameRingGUID            = 0;
         }
 
-        void OnPlayerEnter(Player* /*player*/)
+        void OnPlayerEnter(Player* /*player*/) override
         {
             if (GetBossState(DATA_HALION_INTRO_DONE) != DONE && GetBossState(DATA_GENERAL_ZARITHRIAN) == DONE)
             {
-                instance->LoadGrid(3156.0f, 537.0f);
                 if (Creature* halionController = instance->GetCreature(HalionControllerGUID))
                     halionController->AI()->DoAction(ACTION_INTRO_HALION);
             }
         }
 
-        void OnCreatureCreate(Creature* creature)
+        void OnCreatureCreate(Creature* creature) override
         {
             switch (creature->GetEntry())
             {
@@ -101,11 +114,10 @@ public:
                     if (Creature* halion = instance->GetCreature(HalionGUID))
                         halion->AI()->JustSummoned(creature);
                     break;
-
             }
         }
 
-        void OnGameObjectCreate(GameObject* go)
+        void OnGameObjectCreate(GameObject* go) override
         {
             switch (go->GetEntry())
             {
@@ -116,7 +128,7 @@ public:
                 case GO_BURNING_TREE_3:
                 case GO_BURNING_TREE_4:
                 case GO_TWILIGHT_FLAME_RING:
-                    AddDoor(go, true);
+                    AddDoor(go);
                     break;
                 case GO_FLAME_RING:
                     FlameRingGUID = go->GetGUID();
@@ -124,7 +136,7 @@ public:
             }
         }
 
-        void OnGameObjectRemove(GameObject* go)
+        void OnGameObjectRemove(GameObject* go) override
         {
             switch (go->GetEntry())
             {
@@ -134,12 +146,12 @@ public:
                 case GO_BURNING_TREE_2:
                 case GO_BURNING_TREE_3:
                 case GO_BURNING_TREE_4:
-                    AddDoor(go, false);
+                    RemoveDoor(go);
                     break;
             }
         }
 
-        uint64 GetData64(uint32 type) const
+        ObjectGuid GetGuidData(uint32 type) const override
         {
             switch (type)
             {
@@ -165,21 +177,31 @@ public:
                     return FlameRingGUID;
             }
 
-            return 0;
+            return ObjectGuid::Empty;
         }
 
-        bool SetBossState(uint32 type, EncounterState state)
+        bool SetBossState(uint32 type, EncounterState state) override
         {
             if (!InstanceScript::SetBossState(type, state))
                 return false;
 
             switch (type)
             {
+                case DATA_HALION_INTRO_DONE:
+                    if (state != DONE)
+                    {
+                        SetBossState(DATA_HALION_INTRO1, NOT_STARTED);
+                        SetBossState(DATA_HALION_INTRO2, NOT_STARTED);
+                    }
+                    break;
                 case DATA_SAVIANA_RAGEFIRE:
                 case DATA_BALTHARUS_THE_WARBORN:
                     if (GetBossState(DATA_BALTHARUS_THE_WARBORN) == DONE && GetBossState(DATA_SAVIANA_RAGEFIRE) == DONE)
                         if (Creature* zarithrian = instance->GetCreature(GeneralZarithrianGUID))
-                            zarithrian->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_NOT_SELECTABLE);
+                        {
+                            zarithrian->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                            zarithrian->SetImmuneToPC(false);
+                        }
                     break;
                 case DATA_GENERAL_ZARITHRIAN:
                     if (state == DONE)
@@ -187,9 +209,9 @@ public:
                             halionController->AI()->DoAction(ACTION_INTRO_HALION);
                     break;
                 case DATA_HALION:
-                    DoUpdateWorldState(WORLDSTATE_CORPOREALITY_TOGGLE, 0);
-                    DoUpdateWorldState(WORLDSTATE_CORPOREALITY_TWILIGHT, 0);
-                    DoUpdateWorldState(WORLDSTATE_CORPOREALITY_MATERIAL, 0);
+                    DoUpdateWorldState(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_TOGGLE, 0);
+                    DoUpdateWorldState(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_TWILIGHT, 0);
+                    DoUpdateWorldState(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_MATERIAL, 0);
                     HandleGameObject(FlameRingGUID, true);
                     break;
             }
@@ -197,117 +219,61 @@ public:
             return true;
         }
 
-        std::string GetSaveData()
+        void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override
         {
-            OUT_SAVE_INST_DATA;
-
-            std::ostringstream saveStream;
-            saveStream << "R S " << GetBossSaveData();
-
-            OUT_SAVE_INST_DATA_COMPLETE;
-            return saveStream.str();
-        }
-
-        void FillInitialWorldStates(WorldPacket& data)
-        {
-            data << uint32(WORLDSTATE_CORPOREALITY_MATERIAL) << uint32(50);
-            data << uint32(WORLDSTATE_CORPOREALITY_TWILIGHT) << uint32(50);
-            data << uint32(WORLDSTATE_CORPOREALITY_TOGGLE) << uint32(0);
-        }
-
-        void Load(char const* str)
-        {
-            if (!str)
-            {
-                OUT_LOAD_INST_DATA_FAIL;
-                return;
-            }
-
-            OUT_LOAD_INST_DATA(str);
-
-            char dataHead1, dataHead2;
-
-            std::istringstream loadStream(str);
-            loadStream >> dataHead1 >> dataHead2;
-
-            if (dataHead1 == 'R' && dataHead2 == 'S')
-            {
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                {
-                    uint32 tmpState;
-                    loadStream >> tmpState;
-                    if (tmpState == IN_PROGRESS || tmpState > SPECIAL)
-                        tmpState = NOT_STARTED;
-
-                    SetBossState(i, EncounterState(tmpState));
-                }
-
-                // Xinef: additional check
-                if (GetBossState(DATA_HALION_INTRO_DONE) != DONE)
-                {
-                    SetBossState(DATA_HALION_INTRO1, NOT_STARTED);
-                    SetBossState(DATA_HALION_INTRO2, NOT_STARTED);
-                }
-            }
-            else
-                OUT_LOAD_INST_DATA_FAIL;
-
-            OUT_LOAD_INST_DATA_COMPLETE;
+            packet.Worldstates.reserve(3);
+            packet.Worldstates.emplace_back(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_MATERIAL, 50);
+            packet.Worldstates.emplace_back(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_TWILIGHT, 50);
+            packet.Worldstates.emplace_back(WORLD_STATE_RUBY_SANCTUM_CORPOREALITY_TOGGLE, 0);
         }
 
     protected:
-        uint64 BaltharusTheWarbornGUID;
-        uint64 XerestraszaGUID;
-        uint64 GeneralZarithrianGUID;
-        uint64 ZarithrianSpawnStalkerGUID[2];
+        ObjectGuid BaltharusTheWarbornGUID;
+        ObjectGuid XerestraszaGUID;
+        ObjectGuid GeneralZarithrianGUID;
+        ObjectGuid ZarithrianSpawnStalkerGUID[2];
 
-        uint64 HalionGUID;
-        uint64 TwilightHalionGUID;
-        uint64 HalionControllerGUID;
-        uint64 OrbCarrierGUID;
-        uint64 FlameRingGUID;
+        ObjectGuid HalionGUID;
+        ObjectGuid TwilightHalionGUID;
+        ObjectGuid HalionControllerGUID;
+        ObjectGuid OrbCarrierGUID;
+        ObjectGuid FlameRingGUID;
     };
 
-    InstanceScript* GetInstanceScript(InstanceMap* map) const
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
         return new instance_ruby_sanctum_InstanceMapScript(map);
     }
 };
 
-class spell_ruby_sanctum_rallying_shout : public SpellScriptLoader
+class spell_ruby_sanctum_rallying_shout : public SpellScript
 {
-public:
-    spell_ruby_sanctum_rallying_shout() : SpellScriptLoader("spell_ruby_sanctum_rallying_shout") { }
+    PrepareSpellScript(spell_ruby_sanctum_rallying_shout);
 
-    class spell_ruby_sanctum_rallying_shout_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_ruby_sanctum_rallying_shout_SpellScript);
+        return ValidateSpellInfo({ SPELL_RALLY });
+    }
 
-        void CountAllies()
-        {
-            uint32 count = GetSpell()->GetUniqueTargetInfo()->size();
-            if (count == GetCaster()->GetAuraCount(SPELL_RALLY))
-                return;
-
-            GetCaster()->RemoveAurasDueToSpell(SPELL_RALLY);
-            if (count > 0)
-                GetCaster()->CastCustomSpell(SPELL_RALLY, SPELLVALUE_AURA_STACK, count, GetCaster(), true);
-        }
-
-        void Register()
-        {
-            AfterHit += SpellHitFn(spell_ruby_sanctum_rallying_shout_SpellScript::CountAllies);
-        }
-    };
-
-    SpellScript* GetSpellScript() const
+    void CountAllies()
     {
-        return new spell_ruby_sanctum_rallying_shout_SpellScript();
+        uint32 count = GetSpell()->GetUniqueTargetInfo()->size();
+        if (count == GetCaster()->GetAuraCount(SPELL_RALLY))
+            return;
+
+        GetCaster()->RemoveAurasDueToSpell(SPELL_RALLY);
+        if (count > 0)
+            GetCaster()->CastCustomSpell(SPELL_RALLY, SPELLVALUE_AURA_STACK, count, GetCaster(), true);
+    }
+
+    void Register() override
+    {
+        AfterHit += SpellHitFn(spell_ruby_sanctum_rallying_shout::CountAllies);
     }
 };
 
 void AddSC_instance_ruby_sanctum()
 {
     new instance_ruby_sanctum();
-    new spell_ruby_sanctum_rallying_shout();
+    RegisterSpellScript(spell_ruby_sanctum_rallying_shout);
 }

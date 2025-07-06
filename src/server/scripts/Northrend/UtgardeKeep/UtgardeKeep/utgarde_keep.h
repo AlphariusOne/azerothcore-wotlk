@@ -1,11 +1,30 @@
 /*
- * Originally written by Pussywizard - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_UTGARDE_KEEP_H
 #define DEF_UTGARDE_KEEP_H
 
-#include "SpellScript.h"
+#include "CreatureAIImpl.h"
+
+#define UtgardeKeepScriptName "instance_utgarde_keep"
+
+#define DataHeader "UK"
+
+uint32 const EncounterCount = 3;
 
 enum eData
 {
@@ -16,6 +35,9 @@ enum eData
     DATA_FORGE_EVENT_MASK,
     DATA_DALRONN,
     DATA_SKARVALD,
+    DATA_DALRONN_GHOST,
+    DATA_SKARVALD_GHOST,
+    DATA_DARK_RANGER_MARRAH,
     DATA_ON_THE_ROCKS_ACHIEV,
 
     DATA_SPECIAL_DRAKE = 50,
@@ -58,5 +80,13 @@ enum eCreatures
     NPC_DARK_RANGER_MARRAH          = 24137,
     NPC_ENSLAVED_PROTO_DRAKE        = 24083,
 };
+
+template <class AI, class T>
+inline AI* GetUtgardeKeepAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, UtgardeKeepScriptName);
+}
+
+#define RegisterUtgardeKeepCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetUtgardeKeepAI)
 
 #endif

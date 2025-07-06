@@ -1,16 +1,28 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #ifndef DEF_NEXUS_H
 #define DEF_NEXUS_H
 
-#include "Player.h"
-#include "SpellScript.h"
-#include "PassiveAI.h"
-#include "SpellAuras.h"
-#include "GridNotifiers.h"
-#include "GameEventMgr.h"
+#include "CreatureAIImpl.h"
+
+#define DataHeader "NEX"
+
+#define NexusScriptName "instance_nexus"
 
 enum eTypes
 {
@@ -43,5 +55,13 @@ enum Npcs
     GO_ANOMALUS_SPHERE              = 188527,
     GO_ORMOROK_SPHERE               = 188528
 };
+
+template <class AI, class T>
+inline AI* GetNexusAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, NexusScriptName);
+}
+
+#define RegisterNexusCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetNexusAI)
 
 #endif

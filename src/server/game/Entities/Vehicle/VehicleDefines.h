@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __ACORE_VEHICLEDEFINES_H
@@ -9,9 +20,8 @@
 
 #include "Define.h"
 #include "Map.h"
-#include "Object.h"
-#include <vector>
 #include <map>
+#include <vector>
 
 struct VehicleSeatEntry;
 
@@ -39,11 +49,19 @@ enum VehicleFlags
 
 enum VehicleSpells
 {
-    VEHICLE_SPELL_RIDE_HARDCODED                = 46598,
-    VEHICLE_SPELL_PARACHUTE                     = 45472,
+    VEHICLE_SPELL_RIDE_HARDCODED                 = 46598,
+    VEHICLE_SPELL_PARACHUTE                      = 45472,
 
-    VEHICLE_SPELL_GEIST_CONTROL_END             = 58119,
-    VEHICLE_SPELL_SHADE_CONTROL_END             = 58664
+    VEHICLE_SPELL_GEIST_CONTROL_END              = 58119,
+    VEHICLE_SPELL_SHADE_CONTROL_END              = 58664
+};
+
+enum class VehicleExitParameters
+{
+    VehicleExitParamNone    = 0, // provided parameters will be ignored
+    VehicleExitParamOffset  = 1, // provided parameters will be used as offset values
+    VehicleExitParamDest    = 2, // provided parameters will be used as absolute destination
+    VehicleExitParamMax
 };
 
 enum VehicleNPCs
@@ -54,26 +72,42 @@ enum VehicleNPCs
 
 struct PassengerInfo
 {
-    uint64 Guid;
+    ObjectGuid Guid;
     bool IsUnselectable;
 
     void Reset()
     {
-        Guid = 0;
+        Guid.Clear();
         IsUnselectable = false;
     }
 };
 
+struct VehicleSeatAddon
+{
+    VehicleSeatAddon() { }
+    VehicleSeatAddon(float orientatonOffset, float exitX, float exitY, float exitZ, float exitO, uint8 param) :
+        SeatOrientationOffset(orientatonOffset), ExitParameterX(exitX), ExitParameterY(exitY), ExitParameterZ(exitZ),
+        ExitParameterO(exitO), ExitParameter(VehicleExitParameters(param)) { }
+
+    float SeatOrientationOffset = 0.f;
+    float ExitParameterX = 0.f;
+    float ExitParameterY = 0.f;
+    float ExitParameterZ = 0.f;
+    float ExitParameterO = 0.f;
+    VehicleExitParameters ExitParameter = VehicleExitParameters::VehicleExitParamNone;
+};
+
 struct VehicleSeat
 {
-    explicit VehicleSeat(VehicleSeatEntry const* seatInfo) : SeatInfo(seatInfo)
+    explicit VehicleSeat(VehicleSeatEntry const* seatInfo, VehicleSeatAddon const* seatAddon) : SeatInfo(seatInfo), SeatAddon(seatAddon)
     {
         Passenger.Reset();
     }
 
-    bool IsEmpty() const { return !Passenger.Guid; }
+    [[nodiscard]] bool IsEmpty() const { return !Passenger.Guid; }
 
     VehicleSeatEntry const* SeatInfo;
+    VehicleSeatAddon const* SeatAddon;
     PassengerInfo Passenger;
 };
 
@@ -95,8 +129,8 @@ typedef std::map<int8, VehicleSeat> SeatMap;
 class TransportBase
 {
 protected:
-    TransportBase() { }
-    virtual ~TransportBase() { }
+    TransportBase() = default;
+    virtual ~TransportBase() = default;
 
 public:
     /// This method transforms supplied transport offsets into global coordinates

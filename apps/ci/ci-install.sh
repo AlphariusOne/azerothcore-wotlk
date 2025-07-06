@@ -7,21 +7,18 @@ MTHREADS=$(($(grep -c ^processor /proc/cpuinfo) + 2))
 CWARNINGS=ON
 CDEBUG=OFF
 CTYPE=Release
-CSCRIPTS=ON
+CSCRIPTS=static
 CBUILD_TESTING=ON
 CSERVERS=ON
 CTOOLS=ON
 CSCRIPTPCH=OFF
 CCOREPCH=OFF
 CCUSTOMOPTIONS='-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_FLAGS="-Werror" -DCMAKE_CXX_FLAGS="-Werror"'
-DB_CHARACTERS_CONF="MYSQL_USER='root'; MYSQL_PASS='root'; MYSQL_HOST='localhost';"
-DB_AUTH_CONF="MYSQL_USER='root'; MYSQL_PASS='root'; MYSQL_HOST='localhost';"
-DB_WORLD_CONF="MYSQL_USER='root'; MYSQL_PASS='root'; MYSQL_HOST='localhost';"
 CONFIG_SH
 
 time sudo apt-get update -y
 # time sudo apt-get upgrade -y
-time sudo apt-get install -y git lsb-release sudo ccache
+time sudo apt-get install -y git lsb-release sudo
 time ./acore.sh install-deps
 
 case $COMPILER in
@@ -31,6 +28,12 @@ case $COMPILER in
     time sudo apt-get install -y gcc g++
     echo "CCOMPILERC=\"gcc\"" >> ./conf/config.sh
     echo "CCOMPILERCXX=\"g++\"" >> ./conf/config.sh
+    ;;
+
+  "gcc8" )
+    time sudo apt-get install -y gcc-8 g++-8
+    echo "CCOMPILERC=\"gcc-8\"" >> ./conf/config.sh
+    echo "CCOMPILERCXX=\"g++-8\"" >> ./conf/config.sh
     ;;
 
   "gcc10" )
@@ -46,22 +49,22 @@ case $COMPILER in
     echo "CCOMPILERCXX=\"clang++\"" >> ./conf/config.sh
     ;;
 
-  "clang6" )
-    time sudo apt-get install -y clang-6.0
-    echo "CCOMPILERC=\"clang-6.0\"" >> ./conf/config.sh
-    echo "CCOMPILERCXX=\"clang++-6.0\"" >> ./conf/config.sh
-    ;;
-
-  "clang9" )
-    time sudo apt-get install -y clang-9
-    echo "CCOMPILERC=\"clang-9\"" >> ./conf/config.sh
-    echo "CCOMPILERCXX=\"clang++-9\"" >> ./conf/config.sh
-    ;;
-
   "clang10" )
     time sudo apt-get install -y clang-10
     echo "CCOMPILERC=\"clang-10\"" >> ./conf/config.sh
     echo "CCOMPILERCXX=\"clang++-10\"" >> ./conf/config.sh
+    ;;
+
+  "clang11" )
+    time sudo apt-get install -y clang-11
+    echo "CCOMPILERC=\"clang-11\"" >> ./conf/config.sh
+    echo "CCOMPILERCXX=\"clang++-11\"" >> ./conf/config.sh
+    ;;
+
+  "clang12" )
+    time sudo apt-get install -y clang-12
+    echo "CCOMPILERC=\"clang-12\"" >> ./conf/config.sh
+    echo "CCOMPILERCXX=\"clang++-12\"" >> ./conf/config.sh
     ;;
 
   * )

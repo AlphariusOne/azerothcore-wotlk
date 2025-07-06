@@ -1,27 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Guards
-SD%Complete: 100
-SDComment:
-SDCategory: Guards
-EndScriptData */
-
-/* ContentData
-guard_generic
-guard_shattrath_aldor
-guard_shattrath_scryer
-EndContentData */
-
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
+#include "CreatureScript.h"
 #include "GuardAI.h"
 #include "Player.h"
-#include "SpellInfo.h"
+#include "ScriptedCreature.h"
 
 enum GuardShattrath
 {
@@ -40,15 +37,15 @@ public:
     {
         guard_shattrath_scryerAI(Creature* creature) : GuardAI(creature) { }
 
-        void Reset()
+        void Reset() override
         {
             banishTimer = 5000;
             exileTimer = 8500;
-            playerGUID = 0;
+            playerGUID.Clear();
             canTeleport = false;
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -62,7 +59,7 @@ public:
                         temp->CastSpell(temp, SPELL_EXILE, true);
                         temp->CastSpell(temp, SPELL_BANISH_TELEPORT, true);
                     }
-                    playerGUID = 0;
+                    playerGUID.Clear();
                     exileTimer = 8500;
                     canTeleport = false;
                 }
@@ -71,7 +68,7 @@ public:
             else if (banishTimer <= diff)
             {
                 Unit* temp = me->GetVictim();
-                if (temp && temp->GetTypeId() == TYPEID_PLAYER)
+                if (temp && temp->IsPlayer())
                 {
                     DoCast(temp, SPELL_BANISHED_SHATTRATH_A);
                     banishTimer = 9000;
@@ -88,11 +85,11 @@ public:
     private:
         uint32 exileTimer;
         uint32 banishTimer;
-        uint64 playerGUID;
+        ObjectGuid playerGUID;
         bool canTeleport;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new guard_shattrath_scryerAI(creature);
     }
@@ -107,15 +104,15 @@ public:
     {
         guard_shattrath_aldorAI(Creature* creature) : GuardAI(creature) { }
 
-        void Reset()
+        void Reset() override
         {
             banishTimer = 5000;
             exileTimer = 8500;
-            playerGUID = 0;
+            playerGUID.Clear();
             canTeleport = false;
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim())
                 return;
@@ -129,7 +126,7 @@ public:
                         temp->CastSpell(temp, SPELL_EXILE, true);
                         temp->CastSpell(temp, SPELL_BANISH_TELEPORT, true);
                     }
-                    playerGUID = 0;
+                    playerGUID.Clear();
                     exileTimer = 8500;
                     canTeleport = false;
                 }
@@ -138,7 +135,7 @@ public:
             else if (banishTimer <= diff)
             {
                 Unit* temp = me->GetVictim();
-                if (temp && temp->GetTypeId() == TYPEID_PLAYER)
+                if (temp && temp->IsPlayer())
                 {
                     DoCast(temp, SPELL_BANISHED_SHATTRATH_S);
                     banishTimer = 9000;
@@ -154,11 +151,11 @@ public:
     private:
         uint32 exileTimer;
         uint32 banishTimer;
-        uint64 playerGUID;
+        ObjectGuid playerGUID;
         bool canTeleport;
     };
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new guard_shattrath_aldorAI(creature);
     }

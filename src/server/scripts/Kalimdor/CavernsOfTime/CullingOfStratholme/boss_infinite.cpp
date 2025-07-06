@@ -1,8 +1,21 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "culling_of_stratholme.h"
 
@@ -24,7 +37,8 @@ enum Yells
 {
     SAY_AGGRO                                   = 0,
     SAY_DEATH                                   = 1,
-    SAY_FAIL                                    = 2
+    SAY_FAIL                                    = 2,
+    SAY_THANKS                                  = 0
 };
 
 class boss_infinite_corruptor : public CreatureScript
@@ -32,9 +46,9 @@ class boss_infinite_corruptor : public CreatureScript
 public:
     boss_infinite_corruptor() : CreatureScript("boss_infinite_corruptor") { }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
-        return new boss_infinite_corruptorAI(creature);
+        return GetCullingOfStratholmeAI<boss_infinite_corruptorAI>(creature);
     }
 
     struct boss_infinite_corruptorAI : public ScriptedAI
@@ -47,7 +61,7 @@ public:
         SummonList summons;
         uint32 beamTimer;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
             summons.DespawnAll();
@@ -60,9 +74,9 @@ public:
             beamTimer = 1;
         }
 
-        void JustSummoned(Creature* cr) { summons.Summon(cr); }
+        void JustSummoned(Creature* cr) override { summons.Summon(cr); }
 
-        void EnterCombat(Unit* /*who*/)
+        void JustEngagedWith(Unit* /*who*/) override
         {
             me->InterruptNonMeleeSpells(false);
             events.ScheduleEvent(EVENT_SPELL_VOID_STRIKE, 8000);
@@ -70,27 +84,34 @@ public:
             Talk(SAY_AGGRO);
         }
 
-        void JustDied(Unit* /*killer*/)
+        void JustDied(Unit* /*killer*/) override
         {
             Talk(SAY_DEATH);
             for (SummonList::const_iterator itr = summons.begin(); itr != summons.end(); ++itr)
+            {
                 if (Creature* cr = ObjectAccessor::GetCreature(*me, (*itr)))
                 {
                     if (cr->GetEntry() == NPC_TIME_RIFT)
+                    {
                         cr->DespawnOrUnsummon(1000);
+                    }
                     else
                     {
                         cr->DespawnOrUnsummon(5000);
                         cr->RemoveAllAuras();
-                        cr->MonsterSay("You have my thanks for saving my existence in this timeline. Now i must report back to my superiors. They must know immediately of what i just experienced.", LANG_UNIVERSAL, 0);
+                        cr->AI()->Talk(SAY_THANKS);
                     }
                 }
+            }
 
             if (InstanceScript* pInstance = me->GetInstanceScript())
+            {
                 pInstance->SetData(DATA_SHOW_INFINITE_TIMER, 0);
+                pInstance->DoRemoveAurasDueToSpellOnPlayers(SPELL_CORRUPTING_BLIGHT);
+            }
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
             if (!me->IsAlive())
                 return;
@@ -103,7 +124,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (beamTimer)
             {
@@ -129,7 +150,7 @@ public:
                     events.RepeatEvent(8000);
                     break;
                 case EVENT_SPELL_CORRUPTING_BLIGHT:
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 50.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true))
                         me->CastSpell(target, SPELL_CORRUPTING_BLIGHT, false);
                     events.RepeatEvent(12000);
                     break;
@@ -138,7 +159,6 @@ public:
             DoMeleeAttackIfReady();
         }
     };
-
 };
 
 void AddSC_boss_infinite_corruptor()

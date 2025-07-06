@@ -1,7 +1,18 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2020 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef DBCSTORE_H
@@ -10,6 +21,7 @@
 #include "Common.h"
 #include "DBCStorageIterator.h"
 #include "Errors.h"
+#include <cstring>
 #include <vector>
 
 /// Interface class for common access
@@ -19,8 +31,8 @@ public:
     DBCStorageBase(char const* fmt);
     virtual ~DBCStorageBase();
 
-    char const* GetFormat() const { return _fileFormat; }
-    uint32 GetFieldCount() const { return _fieldCount; }
+    [[nodiscard]] char const* GetFormat() const { return _fileFormat; }
+    [[nodiscard]] uint32 GetFieldCount() const { return _fieldCount; }
 
     virtual bool Load(char const* path) = 0;
     virtual bool LoadStringsFrom(char const* path) = 0;
@@ -49,22 +61,21 @@ public:
         _indexTable.AsT = nullptr;
     }
 
-    ~DBCStorage()
+    ~DBCStorage() override
     {
         delete[] reinterpret_cast<char*>(_indexTable.AsT);
     }
 
-    T const* LookupEntry(uint32 id) const { return (id >= _indexTableSize) ? nullptr : _indexTable.AsT[id]; }
-    T const* AssertEntry(uint32 id) const { return ASSERT_NOTNULL(LookupEntry(id)); }
+    [[nodiscard]] T const* LookupEntry(uint32 id) const { return (id >= _indexTableSize) ? nullptr : _indexTable.AsT[id]; }
+    [[nodiscard]] T const* AssertEntry(uint32 id) const { return ASSERT_NOTNULL(LookupEntry(id)); }
 
-#ifdef ELUNA
     void SetEntry(uint32 id, T* t)
     {
         if (id >= _indexTableSize)
         {
             // Resize
             typedef char* ptr;
-            size_t newSize = id + 1;
+            std::size_t newSize = id + 1;
             ptr* newArr = new ptr[newSize];
             memset(newArr, 0, newSize * sizeof(ptr));
             memcpy(newArr, _indexTable.AsChar, _indexTableSize * sizeof(ptr));
@@ -76,9 +87,8 @@ public:
         delete _indexTable.AsT[id];
         _indexTable.AsT[id] = t;
     }
-#endif
 
-    uint32 GetNumRows() const { return _indexTableSize; }
+    [[nodiscard]] uint32 GetNumRows() const { return _indexTableSize; }
 
     bool Load(char const* path) override
     {

@@ -1,40 +1,46 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_FACTORY_HOLDER
 #define ACORE_FACTORY_HOLDER
 
 #include "Define.h"
-#include "Dynamic/TypeList.h"
 #include "ObjectRegistry.h"
 
-/*
- * FactoryHolder holds a factory object of a specific type
+/** FactoryHolder holds a factory object of a specific type
  */
-template<class T, class Key = std::string>
+template<class T, class O, class Key = std::string>
 class FactoryHolder
 {
 public:
-    typedef ObjectRegistry<FactoryHolder<T, Key >, Key > FactoryHolderRegistry;
+    typedef ObjectRegistry<FactoryHolder<T, O, Key>, Key> FactoryHolderRegistry;
 
-    FactoryHolder(Key k) : i_key(k) { }
+    explicit FactoryHolder(Key const& k) : _key(k) { }
     virtual ~FactoryHolder() { }
-    inline Key key() const { return i_key; }
 
-    void RegisterSelf(void) { FactoryHolderRegistry::instance()->InsertItem(this, i_key); }
-    void DeregisterSelf(void) { FactoryHolderRegistry::instance()->RemoveItem(this, false); }
+    void RegisterSelf() { FactoryHolderRegistry::instance()->InsertItem(this, _key); }
 
     /// Abstract Factory create method
-    virtual T* Create(void* data = NULL) const = 0;
+    virtual T* Create(O* object = nullptr) const = 0;
 private:
-    Key i_key;
+    Key const _key;
 };
 
-/*
- * Permissible is a classic way of letting the object decide
+/** Permissible is a classic way of letting the object decide
  * whether how good they handle things.  This is not retricted
  * to factory selectors.
  */
@@ -43,7 +49,6 @@ class Permissible
 {
 public:
     virtual ~Permissible() { }
-    virtual int Permit(const T*) const = 0;
+    virtual int32 Permit(T const*) const = 0;
 };
-
 #endif

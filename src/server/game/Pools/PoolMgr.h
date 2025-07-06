@@ -1,14 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef ACORE_POOLHANDLER_H
 #define ACORE_POOLHANDLER_H
 
-#include "Define.h"
 #include "Creature.h"
+#include "Define.h"
 #include "GameObject.h"
 #include "QuestDef.h"
 
@@ -21,7 +32,7 @@ struct PoolObject
 {
     uint32  guid;
     float   chance;
-    PoolObject(uint32 _guid, float _chance): guid(_guid), chance(fabs(_chance)) {}
+    PoolObject(uint32 _guid, float _chance): guid(_guid), chance(std::fabs(_chance)) {}
 };
 
 class Pool                                                  // for Pool of Pool case
@@ -61,12 +72,11 @@ public:
     explicit PoolGroup() : poolId(0) { }
     void SetPoolId(uint32 pool_id) { poolId = pool_id; }
     ~PoolGroup() {};
-    bool isEmpty() const { return ExplicitlyChanced.empty() && EqualChanced.empty(); }
+    bool IsEmpty() const { return ExplicitlyChanced.empty() && EqualChanced.empty(); }
     void AddEntry(PoolObject& poolitem, uint32 maxentries);
     bool CheckPool() const;
-    PoolObject* RollOne(ActivePoolData& spawns, uint32 triggerFrom);
-    void DespawnObject(ActivePoolData& spawns, uint32 guid = 0);
-    void Despawn1Object(uint32 guid);
+    void DespawnObject(ActivePoolData& spawns, ObjectGuid::LowType guid = 0);
+    void Despawn1Object(ObjectGuid::LowType guid);
     void SpawnObject(ActivePoolData& spawns, uint32 limit, uint32 triggerFrom);
 
     void Spawn1Object(PoolObject* obj);

@@ -1,24 +1,41 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "utgarde_pinnacle.h"
-#include "Vehicle.h"
 #include "CombatAI.h"
+#include "CreatureScript.h"
+#include "GameObjectScript.h"
 #include "Player.h"
+#include "ScriptedCreature.h"
 #include "SpellInfo.h"
+#include "Vehicle.h"
+#include "utgarde_pinnacle.h"
 
 enum Misc
 {
     // TEXTS
     SAY_AGGRO                           = 0,
     SAY_KILL                            = 1,
-    EMOTE_RANGE                         = 2,
     SAY_DEATH                           = 3,
     SAY_DRAKE_DEATH                     = 5,
     SAY_DRAKE_BREATH                    = 6,
+
+    // EMOTES
+    EMOTE_DEEP_BREATH                   = 0,
+    EMOTE_RANGE                         = 1,
 
     // SPELLS
     SPELL_CRUSH_N                       = 50234,
@@ -28,9 +45,9 @@ enum Misc
     SPELL_WHIRLWIND_N                   = 50228,
     SPELL_WHIRLWIND_H                   = 50228,
 
-    SPELL_FLAME_VISUAL                  = 47592,
-    SPELL_FLAME_BREATH_N                = 47579,
-    SPELL_FLAME_BREATH_H                = 60020,
+    SPELL_FREEZING_CLOUD_VISUAL         = 47592,
+    SPELL_FREEZING_CLOUD_N              = 47579,
+    SPELL_FREEZING_CLOUD_H              = 60020,
 
     SPELL_LAUNCH_HARPOON                = 48642,
 
@@ -82,8 +99,6 @@ static Position SkadiPosition[] =
     {490.76f, -517.389f, 123.368f, 0.0f}
 };
 
-#define EMOTE_IN_RANGE   "Skadi the Ruthless is within range of the harpoon launchers"
-
 enum phase
 {
     PHASE_NONE,
@@ -98,9 +113,9 @@ class boss_skadi : public CreatureScript
 public:
     boss_skadi() : CreatureScript("boss_skadi") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_skadiAI (pCreature);
+        return GetUtgardePinnacleAI<boss_skadiAI>(pCreature);
     }
 
     struct boss_skadiAI : public ScriptedAI
@@ -113,14 +128,14 @@ public:
         InstanceScript* m_pInstance;
         EventMap events;
         SummonList summons;
-        uint64 GraufGUID;
+        ObjectGuid GraufGUID;
         bool SecondPhase, EventStarted;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
             summons.DespawnAll();
-            if (Creature* cr = me->SummonCreature(NPC_GRAUF, 341.741f, -516.955f, 104.669f, 3.12414f))
+            if (Creature* cr = me->SummonCreature(NPC_GRAUF, 341.741f, -516.955f, 116.669f, 3.12414f))
             {
                 GraufGUID = cr->GetGUID();
                 summons.Summon(cr);
@@ -133,7 +148,7 @@ public:
             me->UpdatePosition(343.02f, -507.325f, 104.567f, M_PI, true);
             me->StopMovingOnCurrentPos();
 
-            if(m_pInstance)
+            if (m_pInstance)
             {
                 m_pInstance->DoStopTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT, ACHIEV_TIMED_LODI_DODI);
                 m_pInstance->SetData(DATA_SKADI_THE_RUTHLESS, NOT_STARTED);
@@ -145,7 +160,7 @@ public:
 
         Creature* GetGrauf() { return ObjectAccessor::GetCreature(*me, GraufGUID); }
 
-        void EnterCombat(Unit*  /*pWho*/)
+        void JustEngagedWith(Unit*  /*pWho*/) override
         {
             if (!EventStarted)
             {
@@ -161,19 +176,18 @@ public:
 
                 me->SetControlled(true, UNIT_STATE_ROOT);
                 me->SetInCombatWithZone();
-                events.RescheduleEvent(EVENT_SKADI_START, 2000);
+                events.RescheduleEvent(EVENT_SKADI_START, 2s);
             }
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
-
             if (param == ACTION_PHASE2)
             {
                 SecondPhase = true;
-                events.ScheduleEvent(EVENT_SKADI_CRUSH, 8000);
-                events.ScheduleEvent(EVENT_SKADI_SPEAR, 10000);
-                events.ScheduleEvent(EVENT_SKADI_WHIRLWIND, 15000);
+                events.ScheduleEvent(EVENT_SKADI_CRUSH, 8s);
+                events.ScheduleEvent(EVENT_SKADI_SPEAR, 10s);
+                events.ScheduleEvent(EVENT_SKADI_WHIRLWIND, 15s);
 
                 if (me->GetVictim())
                     me->GetMotionMaster()->MoveChase(me->GetVictim());
@@ -182,7 +196,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             if (!UpdateVictim() && SecondPhase)
                 return;
@@ -209,22 +223,22 @@ public:
                 case EVENT_SKADI_CRUSH:
                     {
                         me->CastSpell(me->GetVictim(), IsHeroic() ? SPELL_CRUSH_H : SPELL_CRUSH_N, false);
-                        events.RepeatEvent(8000);
+                        events.Repeat(8s);
                         break;
                     }
                 case EVENT_SKADI_SPEAR:
                     {
-                        if (Unit* tgt = SelectTarget(SELECT_TARGET_RANDOM, 0))
+                        if (Unit* tgt = SelectTarget(SelectTargetMethod::Random, 0))
                             me->CastSpell(tgt, IsHeroic() ? SPELL_POISONED_SPEAR_H : SPELL_POISONED_SPEAR_N, false);
 
-                        events.RepeatEvent(10000);
+                        events.Repeat(10s);
                         break;
                     }
                 case EVENT_SKADI_WHIRLWIND:
                     {
                         me->CastSpell(me, IsHeroic() ? SPELL_WHIRLWIND_H : SPELL_WHIRLWIND_N, false);
-                        events.RepeatEvent(15000 + rand() % 5000);
-                        events.DelayEvents(10000);
+                        events.Repeat(15s, 20s);
+                        events.DelayEvents(10s);
                         break;
                     }
             }
@@ -232,7 +246,7 @@ public:
             DoMeleeAttackIfReady();
         }
 
-        void JustDied(Unit*  /*pKiller*/)
+        void JustDied(Unit*  /*pKiller*/) override
         {
             summons.DespawnAll();
             Talk(SAY_DEATH);
@@ -240,11 +254,11 @@ public:
             if (m_pInstance)
             {
                 m_pInstance->SetData(DATA_SKADI_THE_RUTHLESS, DONE);
-                m_pInstance->HandleGameObject(m_pInstance->GetData64(SKADI_DOOR), true);
+                m_pInstance->HandleGameObject(m_pInstance->GetGuidData(SKADI_DOOR), true);
             }
         }
 
-        void KilledUnit(Unit*  /*pVictim*/)
+        void KilledUnit(Unit*  /*pVictim*/) override
         {
             if (urand(0, 1))
                 return;
@@ -259,9 +273,9 @@ class boss_skadi_grauf : public CreatureScript
 public:
     boss_skadi_grauf() : CreatureScript("boss_skadi_grauf") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* pCreature) const override
     {
-        return new boss_skadi_graufAI (pCreature);
+        return GetUtgardePinnacleAI<boss_skadi_graufAI>(pCreature);
     }
 
     struct boss_skadi_graufAI : public VehicleAI
@@ -277,7 +291,7 @@ public:
         uint8 currentPos;
         uint8 AchievementHitCount;
 
-        void Reset()
+        void Reset() override
         {
             events.Reset();
             summons.DespawnAll();
@@ -286,12 +300,12 @@ public:
             me->RemoveAllAuras();
         }
 
-        void DoAction(int32 param)
+        void DoAction(int32 param) override
         {
             if (param == ACTION_START_EVENT)
             {
-                events.RescheduleEvent(EVENT_GRAUF_CHECK, 5000);
-                events.RescheduleEvent(EVENT_GRAUF_START, 2000);
+                events.RescheduleEvent(EVENT_GRAUF_CHECK, 5s);
+                events.RescheduleEvent(EVENT_GRAUF_START, 2s);
             }
             else if (param == ACTION_REMOVE_SKADI)
             {
@@ -299,21 +313,20 @@ public:
                     if (Creature* skadi = passenger->ToCreature())
                         skadi->AI()->Talk(SAY_DRAKE_DEATH);
                 me->GetMotionMaster()->MovePoint(10, 480.0f, -513.0f, 108.0f);
-                events.ScheduleEvent(EVENT_GRAUF_REMOVE_SKADI, 2000);
+                events.ScheduleEvent(EVENT_GRAUF_REMOVE_SKADI, 2s);
             }
             else if (param == ACTION_MYGIRL_ACHIEVEMENT)
             {
                 AchievementHitCount++;
                 if (AchievementHitCount >= 3 && m_pInstance)
                     m_pInstance->SetData(DATA_SKADI_ACHIEVEMENT, true);
-
             }
         }
 
-        void SpellHitTarget(Unit* target, const SpellInfo* spellInfo)
+        void SpellHitTarget(Unit* target, SpellInfo const* spellInfo) override
         {
-            if (spellInfo->Id == 47593) // SPELL_FLAME_VISUAL trigger
-                target->CastSpell(target, me->GetMap()->IsHeroic() ? SPELL_FLAME_BREATH_H : SPELL_FLAME_BREATH_N, true);
+            if (spellInfo->Id == 47593) // SPELL_FREEZING_CLOUD_VISUAL trigger
+                target->CastSpell(target, me->GetMap()->IsHeroic() ? SPELL_FREEZING_CLOUD_H : SPELL_FREEZING_CLOUD_N, true);
         }
 
         void SpawnFlameTriggers(uint8 point)
@@ -330,31 +343,30 @@ public:
             {
                 Creature* cr;
                 if ((cr = me->SummonCreature(NPC_BREATH_TRIGGER, 483, -484.9f, 105, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 30000)))
-                    cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FLAME_BREATH_H : SPELL_FLAME_BREATH_N, true);
+                    cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FREEZING_CLOUD_H : SPELL_FREEZING_CLOUD_N, true);
                 if ((cr = me->SummonCreature(NPC_BREATH_TRIGGER, 471.0f, -484.7f, 105, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 30000)))
-                    cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FLAME_BREATH_H : SPELL_FLAME_BREATH_N, true);
+                    cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FREEZING_CLOUD_H : SPELL_FREEZING_CLOUD_N, true);
 
                 for (uint8 j = 0; j < 7; j++)
                     if ((cr = me->SummonCreature(NPC_BREATH_TRIGGER, 477.0f, -507.0f + (j * 3), 105.0f, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 30000)))
-                        cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FLAME_BREATH_H : SPELL_FLAME_BREATH_N, true);
+                        cr->CastSpell(cr, cr->GetMap()->IsHeroic() ? SPELL_FREEZING_CLOUD_H : SPELL_FREEZING_CLOUD_N, true);
             }
         }
 
-        void MovementInform(uint32  /*uiType*/, uint32 Id)
+        void MovementInform(uint32  /*uiType*/, uint32 Id) override
         {
-            switch(Id)
+            switch (Id)
             {
                 case 0:
                 case 1:
-                    me->RemoveAurasDueToSpell(SPELL_FLAME_VISUAL);
+                    me->RemoveAurasDueToSpell(SPELL_FREEZING_CLOUD_VISUAL);
                     me->SetFacingTo(M_PI * 2);
                     break;
                 case 2:
                 case 3:
                     if (m_pInstance)
                         m_pInstance->SetData(SKADI_IN_RANGE, 1);
-
-                    me->MonsterTextEmote(EMOTE_IN_RANGE, 0, true);
+                    Talk(EMOTE_RANGE);
                     me->SetFacingTo(M_PI);
                     break;
             }
@@ -375,7 +387,7 @@ public:
             }
         }
 
-        void EnterCombat(Unit*)
+        void JustEngagedWith(Unit*) override
         {
             me->SetInCombatWithZone();
         }
@@ -426,7 +438,7 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
             switch (events.ExecuteEvent())
@@ -434,7 +446,7 @@ public:
                 case EVENT_GRAUF_CHECK:
                     {
                         CheckPlayers();
-                        events.RepeatEvent(2000);
+                        events.Repeat(2s);
                         break;
                     }
                 case EVENT_GRAUF_START:
@@ -444,8 +456,8 @@ public:
 
                         SpawnHelpers(0);
                         SpawnHelpers(0);
-                        events.ScheduleEvent(EVENT_GRAUF_MOVE, 15000);
-                        events.ScheduleEvent(EVENT_GRAUF_SUMMON_HELPERS, 20000);
+                        events.ScheduleEvent(EVENT_GRAUF_MOVE, 15s);
+                        events.ScheduleEvent(EVENT_GRAUF_SUMMON_HELPERS, 20s);
                         break;
                     }
                 case EVENT_GRAUF_MOVE:
@@ -455,21 +467,22 @@ public:
                         me->GetMotionMaster()->MovePoint(targetPoint, SkadiPosition[targetPoint].GetPositionX(), SkadiPosition[targetPoint].GetPositionY(), SkadiPosition[targetPoint].GetPositionZ());
                         if (targetPoint <= 1)
                         {
+                            Talk(EMOTE_DEEP_BREATH);
                             SpawnFlameTriggers(targetPoint);
-                            me->CastSpell(me, SPELL_FLAME_VISUAL, false);
+                            me->CastSpell(me, SPELL_FREEZING_CLOUD_VISUAL, false);
                         }
 
                         if (m_pInstance)
                             m_pInstance->SetData(SKADI_IN_RANGE, 0);
 
                         currentPos = targetPoint;
-                        events.RepeatEvent(25000);
+                        events.Repeat(25s);
                         break;
                     }
                 case EVENT_GRAUF_SUMMON_HELPERS:
                     {
                         SpawnHelpers(1);
-                        events.RepeatEvent(15000);
+                        events.Repeat(15s);
                         break;
                     }
                 case EVENT_GRAUF_REMOVE_SKADI:
@@ -497,7 +510,7 @@ public:
                 uint8 count = m_pInstance->GetData(SKADI_HITS) + 1;
                 m_pInstance->SetData(SKADI_HITS, count);
 
-                if (Creature* grauf = ObjectAccessor::GetCreature(*pPlayer, m_pInstance->GetData64(DATA_GRAUF)))
+                if (Creature* grauf = ObjectAccessor::GetCreature(*pPlayer, m_pInstance->GetGuidData(DATA_GRAUF)))
                 {
                     if (count >= 3)
                     {
@@ -507,7 +520,7 @@ public:
 
                     grauf->AI()->DoAction(ACTION_MYGIRL_ACHIEVEMENT);
                 }
-                go->CastSpell((Unit*)NULL, SPELL_LAUNCH_HARPOON);
+                go->CastSpell((Unit*)nullptr, SPELL_LAUNCH_HARPOON);
             }
 
         return true;

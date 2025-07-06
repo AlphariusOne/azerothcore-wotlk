@@ -1,72 +1,81 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
 #include "OutdoorPvPGH.h"
-#include "Player.h"
-#include "ObjectMgr.h"
-#include "OutdoorPvPMgr.h"
-#include "WorldPacket.h"
-#include "Language.h"
-#include "World.h"
 #include "GameEventMgr.h"
+#include "MapMgr.h"
+#include "OutdoorPvPMgr.h"
+#include "OutdoorPvPScript.h"
+#include "Player.h"
+#include "WorldPacket.h"
+#include "WorldStateDefines.h"
 
 OutdoorPvPGH::OutdoorPvPGH()
 {
-    m_TypeId = OUTDOOR_PVP_GH;
+    _typeId = OUTDOOR_PVP_GH;
 }
 
 bool OutdoorPvPGH::SetupOutdoorPvP()
 {
     RegisterZone(GH_ZONE);
-    if ((m_obj = new OPvPCapturePointGH(this)))
-    {
-        AddCapturePoint(m_obj);
-        return true;
-    }
-    return false;
+    SetMapFromZone(GH_ZONE);
+
+    AddCapturePoint(new OPvPCapturePointGH(this));
+    return true;
 }
 
 void OutdoorPvPGH::SendRemoveWorldStates(Player* player)
 {
-    player->SendUpdateWorldState(GH_UI_SLIDER_DISPLAY, 0);
-    player->SendUpdateWorldState(GH_UI_SLIDER_POS, 0);
-    player->SendUpdateWorldState(GH_UI_SLIDER_N, 0);
+    player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_DISPLAY, 0);
+    player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_POS, 0);
+    player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_N, 0);
 }
 
 OPvPCapturePointGH::OPvPCapturePointGH(OutdoorPvP* pvp) : OPvPCapturePoint(pvp)
 {
-    SetCapturePointData(189310, 571, 2483.68f, -1873.6f, 10.6877f, -0.104719f, 0.0f, 0.0f, 0.0f, 1.0f);
+    SetCapturePointData(189310, MAP_NORTHREND, 2483.68f, -1873.6f, 10.6877f, -0.104719f, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void OPvPCapturePointGH::FillInitialWorldStates(WorldPacket& data)
+void OPvPCapturePointGH::FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet)
 {
-    data << GH_UI_SLIDER_DISPLAY << uint32(0);
-    data << GH_UI_SLIDER_POS << uint32(50);
-    data << GH_UI_SLIDER_N << uint32(20);
+    packet.Worldstates.reserve(3);
+    packet.Worldstates.emplace_back(WORLD_STATE_OPVP_GH_UI_SLIDER_DISPLAY, 0);
+    packet.Worldstates.emplace_back(WORLD_STATE_OPVP_GH_UI_SLIDER_POS, 50);
+    packet.Worldstates.emplace_back(WORLD_STATE_OPVP_GH_UI_SLIDER_N, 20);
 }
 
 void OPvPCapturePointGH::SendChangePhase()
 {
     // send this too, sometimes the slider disappears, dunno why :(
-    SendUpdateWorldState(GH_UI_SLIDER_DISPLAY, 1);
+    SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_DISPLAY, 1);
     // send these updates to only the ones in this objective
-    uint32 phase = (uint32)ceil((m_value + m_maxValue) / (2 * m_maxValue) * 100.0f);
-    SendUpdateWorldState(GH_UI_SLIDER_POS, phase);
-    SendUpdateWorldState(GH_UI_SLIDER_N, m_neutralValuePct);
+    uint32 phase = (uint32)ceil((_value + _maxValue) / (2 * _maxValue) * 100.0f);
+    SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_POS, phase);
+    SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_N, _neutralValuePct);
 }
 
 bool OPvPCapturePointGH::HandlePlayerEnter(Player* player)
 {
     if (OPvPCapturePoint::HandlePlayerEnter(player))
     {
-        player->SendUpdateWorldState(GH_UI_SLIDER_DISPLAY, 1);
-        uint32 phase = (uint32)ceil((m_value + m_maxValue) / (2 * m_maxValue) * 100.0f);
-        player->SendUpdateWorldState(GH_UI_SLIDER_POS, phase);
-        player->SendUpdateWorldState(GH_UI_SLIDER_N, m_neutralValuePct);
+        player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_DISPLAY, 1);
+        uint32 phase = (uint32)ceil((_value + _maxValue) / (2 * _maxValue) * 100.0f);
+        player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_POS, phase);
+        player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_N, _neutralValuePct);
         return true;
     }
     return false;
@@ -74,14 +83,14 @@ bool OPvPCapturePointGH::HandlePlayerEnter(Player* player)
 
 void OPvPCapturePointGH::HandlePlayerLeave(Player* player)
 {
-    player->SendUpdateWorldState(GH_UI_SLIDER_DISPLAY, 0);
+    player->SendUpdateWorldState(WORLD_STATE_OPVP_GH_UI_SLIDER_DISPLAY, 0);
     OPvPCapturePoint::HandlePlayerLeave(player);
 }
 
 void OPvPCapturePointGH::ChangeState()
 {
     uint32 artkit = 21;
-    switch (m_State)
+    switch (_state)
     {
         case OBJECTIVESTATE_ALLIANCE:
             sGameEventMgr->StopEvent(GH_ALLIANCE_DEFENSE_EVENT);
@@ -99,20 +108,21 @@ void OPvPCapturePointGH::ChangeState()
             break;
     }
 
-    if (GameObject* flag = HashMapHolder<GameObject>::Find(m_capturePointGUID))
-        flag->SetGoArtKit(artkit);
+    Map* map = sMapMgr->FindMap(MAP_NORTHREND, 0);
+    auto bounds = map->GetGameObjectBySpawnIdStore().equal_range(m_capturePointSpawnId);
+    for (auto itr = bounds.first; itr != bounds.second; ++itr)
+        itr->second->SetGoArtKit(artkit);
 }
 
 class OutdoorPvP_grizzly_hills : public OutdoorPvPScript
 {
 public:
-
     OutdoorPvP_grizzly_hills()
         : OutdoorPvPScript("outdoorpvp_gh")
     {
     }
 
-    OutdoorPvP* GetOutdoorPvP() const
+    OutdoorPvP* GetOutdoorPvP() const override
     {
         return new OutdoorPvPGH();
     }

@@ -1,40 +1,53 @@
 /*
- * Originally written by Xinef - Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-AGPL3
-*/
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "InstanceMapScript.h"
 #include "ScriptedCreature.h"
 #include "utgarde_pinnacle.h"
 
-class instance_pinnacle : public InstanceMapScript
+class instance_utgarde_pinnacle : public InstanceMapScript
 {
 public:
-    instance_pinnacle() : InstanceMapScript("instance_pinnacle", 575) { }
+    instance_utgarde_pinnacle() : InstanceMapScript("instance_utgarde_pinnacle", MAP_UTGARDE_PINNACLE) { }
 
-    InstanceScript* GetInstanceScript(InstanceMap* pMap) const
+    InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
-        return new instance_pinnacle_InstanceMapScript(pMap);
+        return new instance_utgarde_pinnacle_InstanceMapScript(pMap);
     }
 
-    struct instance_pinnacle_InstanceMapScript : public InstanceScript
+    struct instance_utgarde_pinnacle_InstanceMapScript : public InstanceScript
     {
-        instance_pinnacle_InstanceMapScript(Map* pMap) : InstanceScript(pMap) {Initialize();};
+        instance_utgarde_pinnacle_InstanceMapScript(Map* pMap) : InstanceScript(pMap) {Initialize();};
 
-        uint64 SvalaSorrowgrave;
-        uint64 GortokPalehoof;
-        uint64 SkadiRuthless;
-        uint64 KingYmiron;
-        uint64 FrenziedWorgen;
-        uint64 RavenousFurbolg;
-        uint64 MassiveJormungar;
-        uint64 FerociousRhino;
-        uint64 Grauf;
+        ObjectGuid SvalaSorrowgrave;
+        ObjectGuid GortokPalehoof;
+        ObjectGuid SkadiRuthless;
+        ObjectGuid KingYmiron;
+        ObjectGuid FrenziedWorgen;
+        ObjectGuid RavenousFurbolg;
+        ObjectGuid MassiveJormungar;
+        ObjectGuid FerociousRhino;
+        ObjectGuid Grauf;
 
-        uint64 SvalaMirrorGUID;
-        uint64 SkadiRuthlessDoor;
-        uint64 YmironDoor;
-        uint64 StatisGenerator;
-        uint32 FightStatus;
+        ObjectGuid SvalaMirrorGUID;
+        ObjectGuid SkadiRuthlessDoor;
+        ObjectGuid YmironDoor;
+        ObjectGuid StatisGenerator;
         uint32 Encounters[MAX_ENCOUNTERS];
         uint8 SkadiHits;
         uint8 SkadiInRange;
@@ -43,25 +56,11 @@ public:
         bool skadiAchievement;
         bool ymironAchievement;
 
-        void Initialize()
+        void Initialize() override
         {
-            SvalaSorrowgrave = 0;
-            GortokPalehoof   = 0;
-            SkadiRuthless    = 0;
-            KingYmiron       = 0;
-            FrenziedWorgen   = 0;
-            RavenousFurbolg  = 0;
-            MassiveJormungar = 0;
-            FerociousRhino   = 0;
-            Grauf            = 0;
-
-            SvalaMirrorGUID  = 0;
-            StatisGenerator  = 0;
+            SetHeaders(DataHeader);
             SkadiHits        = 0;
             SkadiInRange     = 0;
-            SkadiRuthlessDoor = 0;
-            YmironDoor       = 0;
-            FightStatus      = 0;
 
             svalaAchievement = false;
             skadiAchievement = false;
@@ -71,17 +70,17 @@ public:
                 Encounters[i] = NOT_STARTED;
         }
 
-        bool IsEncounterInProgress() const
+        bool IsEncounterInProgress() const override
         {
             for(uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                if(Encounters[i] == IN_PROGRESS)
+                if (Encounters[i] == IN_PROGRESS)
                     return true;
 
             return false;
         }
-        void OnCreatureCreate(Creature* pCreature)
+        void OnCreatureCreate(Creature* pCreature) override
         {
-            switch(pCreature->GetEntry())
+            switch (pCreature->GetEntry())
             {
                 case NPC_SVALA_SORROWGRAVE:
                     SvalaSorrowgrave = pCreature->GetGUID();
@@ -113,19 +112,19 @@ public:
             }
         }
 
-        void OnGameObjectCreate(GameObject* pGo)
+        void OnGameObjectCreate(GameObject* pGo) override
         {
-            switch(pGo->GetEntry())
+            switch (pGo->GetEntry())
             {
                 case GO_SKADI_THE_RUTHLESS_DOOR:
                     SkadiRuthlessDoor = pGo->GetGUID();
                     if (Encounters[DATA_SKADI_THE_RUTHLESS] == DONE)
-                        HandleGameObject(0, true, pGo);
+                        HandleGameObject(ObjectGuid::Empty, true, pGo);
                     break;
                 case GO_KING_YMIRON_DOOR:
                     YmironDoor = pGo->GetGUID();
                     if (Encounters[DATA_KING_YMIRON] == DONE)
-                        HandleGameObject(0, true, pGo);
+                        HandleGameObject(ObjectGuid::Empty, true, pGo);
                     break;
                 case GO_GORK_PALEHOOF_SPHERE:
                     StatisGenerator = pGo->GetGUID();
@@ -136,9 +135,9 @@ public:
             }
         }
 
-        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const*  /*source*/, Unit const*  /*target*/, uint32  /*miscvalue1*/)
+        bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const*  /*source*/, Unit const*  /*target*/, uint32  /*miscvalue1*/) override
         {
-            switch(criteria_id)
+            switch (criteria_id)
             {
                 case 7322: // The Incredible Hulk (2043)
                     return svalaAchievement;
@@ -150,9 +149,9 @@ public:
             return false;
         }
 
-        void SetData(uint32 type, uint32 data)
+        void SetData(uint32 type, uint32 data) override
         {
-            switch(type)
+            switch (type)
             {
                 case DATA_SVALA_SORROWGRAVE:
                 case DATA_GORTOK_PALEHOOF:
@@ -164,7 +163,7 @@ public:
                         HandleGameObject(SkadiRuthlessDoor, true);
                         // Make ymiron attackable
                         if (Creature* cr = instance->GetCreature(KingYmiron))
-                            cr->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                            cr->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
                     }
                     Encounters[type] = data;
                     break;
@@ -188,7 +187,6 @@ public:
                 case DATA_YMIRON_ACHIEVEMENT:
                     ymironAchievement = (bool)data;
                     return;
-
             }
             OUT_SAVE_INST_DATA;
 
@@ -196,49 +194,25 @@ public:
             OUT_SAVE_INST_DATA_COMPLETE;
         }
 
-        std::string GetSaveData()
+        void ReadSaveDataMore(std::istringstream& data) override
         {
-            std::ostringstream saveStream;
-            saveStream << "U P " << Encounters[0] << ' ' << Encounters[1] << ' ' << Encounters[2] << ' ' << Encounters[3];
-            return saveStream.str();
+            data >> Encounters[0];
+            data >> Encounters[1];
+            data >> Encounters[2];
+            data >> Encounters[3];
         }
 
-        void Load(const char* in)
+        void WriteSaveDataMore(std::ostringstream& data) override
         {
-            if (!in)
-            {
-                OUT_LOAD_INST_DATA_FAIL;
-                return;
-            }
-
-            OUT_LOAD_INST_DATA(in);
-
-            char dataHead1, dataHead2;
-            uint16 data0, data1, data2, data3;
-
-            std::istringstream loadStream(in);
-            loadStream >> dataHead1 >> dataHead2 >> data0 >> data1 >> data2 >> data3;
-
-            if (dataHead1 == 'U' && dataHead2 == 'P')
-            {
-                Encounters[0] = data0;
-                Encounters[1] = data1;
-                Encounters[2] = data2;
-                Encounters[3] = data3;
-
-                for (uint8 i = 0; i < MAX_ENCOUNTERS; ++i)
-                    if (Encounters[i] == IN_PROGRESS)
-                        Encounters[i] = NOT_STARTED;
-
-            }
-            else OUT_LOAD_INST_DATA_FAIL;
-
-            OUT_LOAD_INST_DATA_COMPLETE;
+            data << Encounters[0] << ' '
+                << Encounters[1] << ' '
+                << Encounters[2] << ' '
+                << Encounters[3];
         }
 
-        uint32 GetData(uint32 type) const
+        uint32 GetData(uint32 type) const override
         {
-            switch(type)
+            switch (type)
             {
                 case DATA_SVALA_SORROWGRAVE:
                     return Encounters[0];
@@ -256,9 +230,9 @@ public:
             return 0;
         }
 
-        uint64 GetData64(uint32 identifier) const
+        ObjectGuid GetGuidData(uint32 identifier) const override
         {
-            switch(identifier)
+            switch (identifier)
             {
                 case DATA_SVALA_SORROWGRAVE:
                     return SvalaSorrowgrave;
@@ -288,12 +262,12 @@ public:
                     return SvalaMirrorGUID;
             }
 
-            return 0;
+            return ObjectGuid::Empty;
         }
     };
 };
 
 void AddSC_instance_utgarde_pinnacle()
 {
-    new instance_pinnacle();
+    new instance_utgarde_pinnacle();
 }

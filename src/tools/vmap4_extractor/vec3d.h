@@ -1,14 +1,25 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef VEC3D_H
 #define VEC3D_H
 
-#include <iostream>
 #include <cmath>
+#include <iostream>
 
 class Vec3D
 {
@@ -85,14 +96,14 @@ public:
         return *this;
     }
 
-    float lengthSquared() const
+    [[nodiscard]] float lengthSquared() const
     {
         return x * x + y * y + z * z;
     }
 
-    float length() const
+    [[nodiscard]] float length() const
     {
-        return sqrt(x * x + y * y + z * z);
+        return std::sqrt(x * x + y * y + z * z);
     }
 
     Vec3D& normalize()
@@ -126,6 +137,12 @@ public:
     }
 };
 
+class AaBox3D
+{
+public:
+    Vec3D min;
+    Vec3D max;
+};
 
 class Vec2D
 {
@@ -192,14 +209,14 @@ public:
         return *this;
     }
 
-    float lengthSquared() const
+    [[nodiscard]] float lengthSquared() const
     {
         return x * x + y * y;
     }
 
-    float length() const
+    [[nodiscard]] float length() const
     {
-        return sqrt(x * x + y * y);
+        return std::sqrt(x * x + y * y);
     }
 
     Vec2D& normalize()
@@ -214,7 +231,6 @@ public:
         r.normalize();
         return r;
     }
-
 
     friend std::istream& operator>>(std::istream& in, Vec2D& v)
     {
@@ -234,5 +250,10 @@ inline void rotate(float x0, float y0, float* x, float* y, float angle)
     *x = xa * cosf(angle) - ya * sinf(angle) + x0;
     *y = xa * sinf(angle) + ya * cosf(angle) + y0;
 }
+
+struct Quaternion
+{
+    float X, Y, Z, W;
+};
 
 #endif

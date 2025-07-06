@@ -1,24 +1,26 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: https://github.com/azerothcore/azerothcore-wotlk/blob/master/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __BATTLEGROUNDSA_H
 #define __BATTLEGROUNDSA_H
 
 #include "Battleground.h"
-
-struct BattlegroundSAScore : public BattlegroundScore
-{
-    BattlegroundSAScore(Player* player) : BattlegroundScore(player), demolishers_destroyed(0), gates_destroyed(0) { }
-    ~BattlegroundSAScore() { }
-    uint8 demolishers_destroyed;
-    uint8 gates_destroyed;
-
-    uint32 GetAttr1() const final override { return demolishers_destroyed; }
-    uint32 GetAttr2() const final override { return gates_destroyed; }
-};
+#include "BattlegroundScore.h"
+#include "WorldStateDefines.h"
 
 #define BG_SA_FLAG_AMOUNT           3
 #define BG_SA_DEMOLISHER_AMOUNT     4
@@ -39,42 +41,6 @@ enum BG_SA_GateState
     BG_SA_GATE_OK           = 1,
     BG_SA_GATE_DAMAGED      = 2,
     BG_SA_GATE_DESTROYED    = 3
-};
-
-enum BG_SA_Timers
-{
-    BG_SA_BOAT_START    =  60 * IN_MILLISECONDS,
-    BG_SA_WARMUPLENGTH  = 120 * IN_MILLISECONDS,
-    BG_SA_ROUNDLENGTH   = 600 * IN_MILLISECONDS
-};
-
-enum BG_SA_WorldStates
-{
-    BG_SA_TIMER_MINS                = 3559,
-    BG_SA_TIMER_SEC_TENS            = 3560,
-    BG_SA_TIMER_SEC_DECS            = 3561,
-    BG_SA_ALLY_ATTACKS              = 4352,
-    BG_SA_HORDE_ATTACKS             = 4353,
-    BG_SA_PURPLE_GATEWS             = 3614,
-    BG_SA_RED_GATEWS                = 3617,
-    BG_SA_BLUE_GATEWS               = 3620,
-    BG_SA_GREEN_GATEWS              = 3623,
-    BG_SA_YELLOW_GATEWS             = 3638,
-    BG_SA_ANCIENT_GATEWS            = 3849,
-    BG_SA_LEFT_GY_ALLIANCE          = 3635,
-    BG_SA_RIGHT_GY_ALLIANCE         = 3636,
-    BG_SA_CENTER_GY_ALLIANCE        = 3637,
-    BG_SA_RIGHT_ATT_TOKEN_ALL       = 3627,
-    BG_SA_LEFT_ATT_TOKEN_ALL        = 3626,
-    BG_SA_LEFT_ATT_TOKEN_HRD        = 3629,
-    BG_SA_RIGHT_ATT_TOKEN_HRD       = 3628,
-    BG_SA_HORDE_DEFENCE_TOKEN       = 3631,
-    BG_SA_ALLIANCE_DEFENCE_TOKEN    = 3630,
-    BG_SA_RIGHT_GY_HORDE            = 3632,
-    BG_SA_LEFT_GY_HORDE             = 3633,
-    BG_SA_CENTER_GY_HORDE           = 3634,
-    BG_SA_BONUS_TIMER               = 0xdf3,
-    BG_SA_ENABLE_TIMER              = 3564,
 };
 
 enum npc
@@ -401,10 +367,19 @@ float const BG_SA_GYOrientation[BG_SA_MAX_GY] =
     6.148f, // defender last GY
 };
 
+enum BG_SA_BroadcastTexts
+{
+    BG_SA_TEXT_ALLIANCE_CAPTURED_TITAN_PORTAL = 28944,
+    BG_SA_TEXT_HORDE_CAPTURED_TITAN_PORTAL = 28945,
+
+    BG_SA_TEXT_ROUND_TWO_START_ONE_MINUTE = 29448,
+    BG_SA_TEXT_ROUND_TWO_START_HALF_MINUTE = 29449
+};
+
 struct BG_SA_RoundScore
 {
     TeamId winner;
-    uint32 time;
+    Milliseconds time;
 };
 
 const float SOTADefPortalDest[5][4] =
@@ -416,41 +391,73 @@ const float SOTADefPortalDest[5][4] =
     { 1193.857f, 69.9f, 58.046f, 5.7245f },
 };
 
+struct BattlegroundSAScore final : public BattlegroundScore
+{
+    friend class BattlegroundSA;
+
+protected:
+    BattlegroundSAScore(ObjectGuid playerGuid) : BattlegroundScore(playerGuid) { }
+
+    void UpdateScore(uint32 type, uint32 value) override
+    {
+        switch (type)
+        {
+        case SCORE_DESTROYED_DEMOLISHER:
+            DemolishersDestroyed += value;
+            break;
+        case SCORE_DESTROYED_WALL:
+            GatesDestroyed += value;
+            break;
+        default:
+            BattlegroundScore::UpdateScore(type, value);
+            break;
+        }
+    }
+
+    void BuildObjectivesBlock(WorldPacket& data) final;
+
+    uint32 GetAttr1() const override { return DemolishersDestroyed; }
+    uint32 GetAttr2() const override { return GatesDestroyed; }
+
+    uint32 DemolishersDestroyed = 0;
+    uint32 GatesDestroyed = 0;
+};
+
 /// Class for manage Strand of Ancient battleground
-class BattlegroundSA : public Battleground
+class AC_GAME_API BattlegroundSA : public Battleground
 {
 public:
     BattlegroundSA();
-    ~BattlegroundSA();
+    ~BattlegroundSA() override;
 
     /**
      * \brief Called every time for update battle data
      * -Update timer
      * -Round switch
      */
-    void PostUpdateImpl(uint32 diff);
+    void PostUpdateImpl(uint32 diff) override;
 
     /* inherited from BattlegroundClass */
     /// Called when a player join battle
-    void AddPlayer(Player* player);
+    void AddPlayer(Player* player) override;
     /// Called when battle start
-    void StartingEventCloseDoors();
-    void StartingEventOpenDoors();
+    void StartingEventCloseDoors() override;
+    void StartingEventOpenDoors() override;
     /// Called for ini battleground, after that the first player be entered
-    bool SetupBattleground();
-    void Init();
+    bool SetupBattleground() override;
+    void Init() override;
     /// Called for generate packet contain worldstate data
-    void FillInitialWorldStates(WorldPacket& data);
+    void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override;
     /// Called when a player deal damage to building (door)
-    void EventPlayerDamagedGO(Player* player, GameObject* go, uint32 eventType);
+    void EventPlayerDamagedGO(Player* player, GameObject* go, uint32 eventType) override;
     /// Called when a player kill a unit in bg
-    void HandleKillUnit(Creature* creature, Player* killer);
+    void HandleKillUnit(Creature* creature, Player* killer) override;
     /// Return the nearest graveyard where player can respawn
-    GraveyardStruct const* GetClosestGraveyard(Player* player);
+    GraveyardStruct const* GetClosestGraveyard(Player* player) override;
     /// Called when a player click on flag (graveyard flag)
-    void EventPlayerClickedOnFlag(Player* Source, GameObject* gameObject);
+    void EventPlayerClickedOnFlag(Player* Source, GameObject* gameObject) override;
     /// Called when a player use a gamobject (relic)
-    void EventPlayerUsedGO(Player* Source, GameObject* object);
+    void EventPlayerUsedGO(Player* Source, GameObject* object) override;
 
     /// Return worldstate id, according to door id
     uint32 GetWorldStateFromGateID(uint32 id)
@@ -459,37 +466,33 @@ public:
         switch (id)
         {
             case BG_SA_GREEN_GATE:
-                uws = BG_SA_GREEN_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_GREEN_GATE;
                 break;
             case BG_SA_YELLOW_GATE:
-                uws = BG_SA_YELLOW_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_YELLOW_GATE;
                 break;
             case BG_SA_BLUE_GATE:
-                uws = BG_SA_BLUE_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_BLUE_GATE;
                 break;
             case BG_SA_RED_GATE:
-                uws = BG_SA_RED_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_RED_GATE;
                 break;
             case BG_SA_PURPLE_GATE:
-                uws = BG_SA_PURPLE_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_PURPLE_GATE;
                 break;
             case BG_SA_ANCIENT_GATE:
-                uws = BG_SA_ANCIENT_GATEWS;
+                uws = WORLD_STATE_BATTLEGROUND_SA_ANCIENT_GATE;
                 break;
         }
         return uws;
     }
 
     /// Called on battleground ending
-    void EndBattleground(TeamId winnerTeamId);
+    void EndBattleground(TeamId winnerTeamId) override;
 
     /// CAlled when a player leave battleground
-    void RemovePlayer(Player* player);
-    void HandleAreaTrigger(Player* player, uint32 trigger);
-
-    /* Scorekeeping */
-    /// Update score board
-    void UpdatePlayerScore(Player* player, uint32 type, uint32 value, bool doAddHonor = true);
+    void RemovePlayer(Player* player) override;
+    void HandleAreaTrigger(Player* player, uint32 trigger) override;
 
     // Teleporters
     void DefendersPortalTeleport(GameObject* portal, Player* plr);
@@ -501,12 +504,11 @@ public:
     bool notEvenAScratch(TeamId teamId) const { return _notEvenAScratch[teamId]; }
 
 private:
-
     /// Return gate id, relative to bg data, according to gameobject id
     uint32 GetGateIDFromEntry(uint32 id)
     {
         uint32 i = 0;
-        switch(id)
+        switch (id)
         {
             case 190722:
                 i = BG_SA_GREEN_GATE;
@@ -561,7 +563,7 @@ private:
      * -Update worldstate
      * -Delete gameobject in front of door (lighting object, with different colours for each door)
      */
-    void DestroyGate(Player* player, GameObject* go);
+    void DestroyGate(Player* player, GameObject* go) override;
     /// Update timer worldstate
     void SendTime();
     /**
@@ -588,9 +590,9 @@ private:
     /// Id of attacker team
     TeamId Attackers;
     /// Totale elapsed time of current round
-    uint32 TotalTime;
+    Milliseconds TotalTime;
     /// Max time of round
-    uint32 EndRoundTimer;
+    Milliseconds EndRoundTimer;
     /// For know if boats has start moving or not yet
     bool ShipsStarted;
     /// Status of each gate (Destroy/Damage/Intact)
@@ -617,6 +619,6 @@ private:
     bool _relicClicked;
 
     // Achievement: Not Even a Scratch
-    bool _notEvenAScratch[BG_TEAMS_COUNT];
+    bool _notEvenAScratch[PVP_TEAMS_COUNT];
 };
 #endif

@@ -1,12 +1,24 @@
 /*
- * Copyright (C) 2016+     AzerothCore <www.azerothcore.org>, released under GNU GPL v2 license: http://github.com/azerothcore/azerothcore-wotlk/LICENSE-GPL2
- * Copyright (C) 2008-2016 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "mpq_libmpq04.h"
-#include <deque>
+#include <algorithm>
 #include <cstdio>
+#include <deque>
 
 ArchiveSet gOpenArchives;
 
@@ -42,6 +54,11 @@ MPQArchive::MPQArchive(const char* filename)
     gOpenArchives.push_front(this);
 }
 
+bool MPQArchive::isOpened() const
+{
+    return std::find(gOpenArchives.begin(), gOpenArchives.end(), this) != gOpenArchives.end();
+}
+
 void MPQArchive::close()
 {
     //gOpenArchives.erase(erase(&mpq_a);
@@ -50,13 +67,13 @@ void MPQArchive::close()
 
 MPQFile::MPQFile(const char* filename):
     eof(false),
-    buffer(0),
+    buffer(nullptr),
     pointer(0),
     size(0)
 {
-    for (ArchiveSet::iterator i = gOpenArchives.begin(); i != gOpenArchives.end(); ++i)
+    for (auto & gOpenArchive : gOpenArchives)
     {
-        mpq_archive* mpq_a = (*i)->mpq_a;
+        mpq_archive* mpq_a = gOpenArchive->mpq_a;
 
         uint32 filenum;
         if (libmpq__file_number(mpq_a, filename, &filenum)) continue;
@@ -68,7 +85,7 @@ MPQFile::MPQFile(const char* filename):
         {
             // printf("info: file %s has size %d; considered dummy file.\n", filename, size);
             eof = true;
-            buffer = 0;
+            buffer = nullptr;
             return;
         }
         buffer = new char[size];
@@ -77,18 +94,17 @@ MPQFile::MPQFile(const char* filename):
         libmpq__file_read(mpq_a, filenum, (unsigned char*)buffer, size, &transferred);
         /*libmpq_file_getdata(&mpq_a, hash, fileno, (unsigned char*)buffer);*/
         return;
-
     }
     eof = true;
-    buffer = 0;
+    buffer = nullptr;
 }
 
-size_t MPQFile::read(void* dest, size_t bytes)
+std::size_t MPQFile::read(void* dest, std::size_t bytes)
 {
     if (eof) return 0;
 
-    size_t rpos = pointer + bytes;
-    if (rpos > size_t(size))
+    std::size_t rpos = pointer + bytes;
+    if (rpos > std::size_t(size))
     {
         bytes = size - pointer;
         eof = true;
@@ -116,6 +132,6 @@ void MPQFile::seekRelative(int offset)
 void MPQFile::close()
 {
     delete[] buffer;
-    buffer = 0;
+    buffer = nullptr;
     eof = true;
 }
